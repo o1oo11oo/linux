@@ -41,6 +41,8 @@ pub mod block;
 #[doc(hidden)]
 pub mod build_assert;
 pub mod cred;
+#[cfg(CONFIG_CRYPTO)]
+pub mod crypto;
 pub mod device;
 pub mod device_id;
 pub mod devres;

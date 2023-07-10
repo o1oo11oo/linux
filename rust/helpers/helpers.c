@@ -14,6 +14,7 @@
 #include "build_assert.c"
 #include "build_bug.c"
 #include "cred.c"
+#include "crypto.c"
 #include "device.c"
 #include "err.c"
 #include "fs.c"
