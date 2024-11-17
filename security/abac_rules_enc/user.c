@@ -71,7 +71,7 @@ avp *get_user_attrs(unsigned int uid) {
 	return attrs;
 }
 
-void clear_user_attrs() {
+void clear_user_attrs(void) {
 	// Clear the user attributes in hash table
 	struct user_hnode *cur;
 	unsigned bkt;
@@ -82,7 +82,7 @@ void clear_user_attrs() {
     }
 }
 
-void print_user_attrs() {
+void print_user_attrs(void) {
 	struct user_hnode *cur;
 	unsigned bkt;
 	printk("Printing user hashtable...");

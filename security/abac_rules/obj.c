@@ -116,7 +116,7 @@ void print_obj_rule_list(obj_rule *r) {
 	}
 }
 
-void print_obj_rule_map() {
+void print_obj_rule_map(void) {
 	struct obj_hnode *cur;
 	unsigned bkt;
 	printk("Printing object hashtable...");

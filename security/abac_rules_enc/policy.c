@@ -67,7 +67,7 @@ abac_rule *get_rule(unsigned int id) {
 	return policy[id];
 }
 
-void clear_policy() {
+void clear_policy(void) {
 	// Clear the rules in policy array
 	int i;
 	printk("clearing policy array...");
@@ -79,7 +79,7 @@ void clear_policy() {
 	kfree(policy);
 }
 
-void print_policy() {
+void print_policy(void) {
 	int i;
 	printk("Printing policy array...");
 	printk("Contains %d rules", count);
