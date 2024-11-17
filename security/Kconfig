@@ -244,6 +244,11 @@ source "security/lockdown/Kconfig"
 
 source "security/integrity/Kconfig"
 
+source "security/abac_trees/Kconfig"
+source "security/abac_trees_enc/Kconfig"
+source "security/abac_rules/Kconfig"
+source "security/abac_rules_enc/Kconfig"
+
 choice
 	prompt "First legacy 'major LSM' to be initialized"
 	default DEFAULT_SECURITY_SELINUX if SECURITY_SELINUX
