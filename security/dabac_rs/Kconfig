@@ -1,0 +1,8 @@
+# SPDX-License-Identifier: GPL-2.0
+
+config SECURITY_DABAC_RS
+	bool "Rust DABAC LSM Support"
+	depends on RUST && SECURITY
+	default y
+	help
+	  This enables the Rust DABAC LSM for flexible ABAC security policies.

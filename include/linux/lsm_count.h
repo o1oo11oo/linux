@@ -114,6 +114,12 @@
 #define ABAC_ENABLED
 #endif
 
+#if IS_ENABLED(CONFIG_SECURITY_DABAC_RS)
+#define DABAC_RS_ENABLED 1,
+#else
+#define DABAC_RS_ENABLED
+#endif
+
 /*
  *  There is a trailing comma that we need to be accounted for. This is done by
  *  using a skipped argument in __COUNT_LSMS
@@ -137,7 +143,8 @@
 		IMA_ENABLED		\
 		EVM_ENABLED		\
 		IPE_ENABLED		\
-		ABAC_ENABLED)
+		ABAC_ENABLED		\
+		DABAC_RS_ENABLED)
 
 #else
 

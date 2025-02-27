@@ -30,6 +30,7 @@ obj-$(CONFIG_CGROUPS)			+= device_cgroup.o
 obj-$(CONFIG_BPF_LSM)			+= bpf/
 obj-$(CONFIG_SECURITY_LANDLOCK)		+= landlock/
 obj-$(CONFIG_SECURITY_IPE)		+= ipe/
+obj-$(CONFIG_SECURITY_DABAC_RS)		+= dabac_rs/
 
 # Object integrity file lists
 obj-$(CONFIG_INTEGRITY)			+= integrity/
