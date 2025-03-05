@@ -5,6 +5,7 @@
 //! Rust-based LSM that implements a dynamic ABAC policy.
 
 mod bindings;
+mod helpers;
 mod pdp;
 
 // Export functions which are called by C, even though that's probably unnecessary
