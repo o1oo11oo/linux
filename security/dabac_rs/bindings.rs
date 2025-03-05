@@ -11,18 +11,26 @@ use kernel::{
         lsm_id, lsm_info, lsm_order_LSM_ORDER_MUTABLE, security_add_hooks, security_hook_list,
         security_list_options, static_calls_table, LSM_ID_DABAC_RS,
     },
+    c_str,
     prelude::*,
     types::Opaque,
 };
 
 use crate::pdp;
 
-// Wrapper to be able to use lsm_id in a static context
+/// The name the LSM gets registered under.
+const NAME: &CStr = c_str!("dabac_rs");
+
+/// The amount of hooks that get registered. Easier to just define this here
+/// than getting it from the array.
+const SECURITY_HOOK_LIST_LEN: usize = 1;
+
+/// Wrapper to be able to use `lsm_id` in a static context.
 #[repr(transparent)]
 struct LsmId(Opaque<lsm_id>);
 unsafe impl Sync for LsmId {}
 
-// Wrapper to be able to use lsm_info in a static context
+/// Wrapper to be able to use `lsm_info` in a static context.
 // Needs to be aligned to size_of::<kernel::ffi::c_ulong>(), but Rust attributes
 // cannot express this and even statically setting it to 8 cannot be combined
 // with repr(transparent).
@@ -30,24 +38,23 @@ unsafe impl Sync for LsmId {}
 struct LsmInfo(Opaque<lsm_info>);
 unsafe impl Sync for LsmInfo {}
 
-const SECURITY_HOOK_LIST_LEN: usize = 1;
-
-// Wrapper to be able to use security_hook_list in a static context
+/// Wrapper to be able to use `security_hook_list` in a static context.
 #[repr(transparent)]
 struct SecurityHookList(Opaque<[security_hook_list; SECURITY_HOOK_LIST_LEN]>);
 unsafe impl Sync for SecurityHookList {}
 
-// Static information about the LSM
+/// Static information about the LSM.
 static DABAC_RS_LSMID: LsmId = LsmId(Opaque::new(lsm_id {
-    name: b"dabac_rs\0".as_ptr(),
+    name: NAME.as_char_ptr(),
     id: LSM_ID_DABAC_RS as _,
 }));
 
-// Register the LSM in the kernel
+/// Registers the LSM in the kernel by placing it in the `.lsm_info.init` linker
+/// section.
 #[used]
 #[link_section = ".lsm_info.init"]
 static DABAC_RS_LSMINFO: LsmInfo = LsmInfo(Opaque::new(lsm_info {
-    name: b"dabac_rs\0".as_ptr(),
+    name: NAME.as_char_ptr(),
     init: Some(dabac_rs_init),
     order: lsm_order_LSM_ORDER_MUTABLE,
     flags: 0,
@@ -55,7 +62,8 @@ static DABAC_RS_LSMINFO: LsmInfo = LsmInfo(Opaque::new(lsm_info {
     blobs: core::ptr::null_mut(),
 }));
 
-/// Init function for the LSM, gets called from C through the pointer stored in lsm_info
+/// Init function for the LSM, gets called from C through the pointer stored in
+/// `lsm_info`.
 #[no_mangle]
 #[link_section = ".init.text"]
 pub extern "C" fn dabac_rs_init() -> kernel::ffi::c_int {
@@ -72,7 +80,8 @@ pub extern "C" fn dabac_rs_init() -> kernel::ffi::c_int {
     0
 }
 
-// List of hooks to register callbacks for
+/// List of hooks to register callbacks for. Length must match
+/// `SECURITY_HOOK_LIST_LEN`.
 #[used]
 #[link_section = ".data..ro_after_init"]
 static mut DABAC_RS_HOOKS: SecurityHookList = SecurityHookList(Opaque::new([security_hook_list {
@@ -83,7 +92,8 @@ static mut DABAC_RS_HOOKS: SecurityHookList = SecurityHookList(Opaque::new([secu
     lsmid: DABAC_RS_LSMID.0.get(),
 }]));
 
-/// Callback for the file permission hook, gets called every time a file is read or written
+/// Callback for the `file_permission` hook, gets called every time a file is
+/// read or written.
 #[no_mangle]
 pub extern "C" fn dabac_rs_file_permission(
     file: *mut kernel::bindings::file,
