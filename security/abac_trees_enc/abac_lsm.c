@@ -8,8 +8,8 @@
 #include <linux/dcache.h>
 #include <linux/cred.h>
 
-static const char* secured_dir = "/home/secured/";
-static const int secured_dir_len = 14;
+static const char* secured_dir = "/home/abac_lsm/";
+static const int secured_dir_len = 15;
 
 // Check if path is secured
 static int is_secured(char *accessed_path)
