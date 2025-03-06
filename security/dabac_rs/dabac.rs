@@ -11,10 +11,17 @@ mod pip;
 
 // Export functions which are called by C, even though that's probably unnecessary
 pub use bindings::{dabac_rs_file_permission, dabac_rs_init};
-use kernel::str::CStr;
+use kernel::{prelude::*, str::CStr};
 
 /// Prefix to appear before log messages printed from within this crate.
 const __LOG_PREFIX: &[u8] = b"dabac_rs\0";
 
 /// An Attribute-Value Pair (AVP) combines an attribute name and its value
 type AVP = (&'static CStr, &'static CStr);
+
+fn init() -> Result<()> {
+    pdp::init()?;
+    pip::init()?;
+
+    Ok(())
+}

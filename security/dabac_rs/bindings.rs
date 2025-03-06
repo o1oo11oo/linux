@@ -68,6 +68,8 @@ static DABAC_RS_LSMINFO: LsmInfo = LsmInfo(Opaque::new(lsm_info {
 #[link_section = ".init.text"]
 pub extern "C" fn dabac_rs_init() -> kernel::ffi::c_int {
     pr_info!("Rust DABAC LSM is starting...\n");
+
+    // Register hooks
     unsafe {
         security_add_hooks(
             &raw mut DABAC_RS_HOOKS.0 as _,
@@ -75,6 +77,12 @@ pub extern "C" fn dabac_rs_init() -> kernel::ffi::c_int {
             DABAC_RS_LSMID.0.get(),
         );
     }
+
+    // Call the normal init function for further component initialization
+    if let Err(e) = super::init() {
+        return e.to_errno();
+    }
+
     pr_info!("Rust DABAC LSM is initialized!\n");
 
     0
