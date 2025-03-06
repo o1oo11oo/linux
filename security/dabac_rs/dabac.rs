@@ -7,6 +7,7 @@
 mod bindings;
 mod helpers;
 mod pdp;
+mod pip;
 
 // Export functions which are called by C, even though that's probably unnecessary
 pub use bindings::{dabac_rs_file_permission, dabac_rs_init};

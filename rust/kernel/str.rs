@@ -151,6 +151,7 @@ impl From<CStrConvertError> for Error {
 ///
 /// Used for interoperability with kernel APIs that take C strings.
 #[repr(transparent)]
+#[derive(PartialEq, Eq)]
 pub struct CStr([u8]);
 
 impl CStr {
