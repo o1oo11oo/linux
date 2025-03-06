@@ -6,8 +6,7 @@
 
 use kernel::{bindings::uid_t, c_str, str::CStr};
 
-/// An Attribute-Value Pair (AVP) combines an attribute name and its value
-type AVP = (&'static CStr, &'static CStr);
+use crate::AVP;
 
 /// User attribute storage, const for now
 const USER_ATTRIBUTES: [(uid_t, [AVP; 2]); 2] = [
