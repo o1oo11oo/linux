@@ -4,6 +4,7 @@
 //!
 //! Policy Information Point for Rust-based DABAC LSM.
 
+use constants::*;
 use kernel::{bindings::uid_t, c_str, global_lock, kvec, prelude::*, str::CStr};
 
 use crate::{epp::PolicyChange, helpers::vec_clone, AVP};
@@ -37,55 +38,42 @@ pub(crate) fn init() -> Result<()> {
     // SAFETY: Called exactly once.
     unsafe { OBJECT_ATTRIBUTES.init() };
 
-    {
-        let mut guard = USER_ATTRIBUTES.lock();
-        guard.reserve(2, GFP_KERNEL)?;
-        guard.push(
-            UserAttribution {
-                user: 0,
-                attr: kvec![
-                    (c_str!("role"), c_str!("admin")),
-                    (c_str!("group"), c_str!("software"))
-                ]?,
-            },
-            GFP_KERNEL,
-        )?;
-        guard.push(
-            UserAttribution {
-                user: 1000,
-                attr: kvec![
-                    (c_str!("role"), c_str!("user")),
-                    (c_str!("group"), c_str!("sales"))
-                ]?,
-            },
-            GFP_KERNEL,
-        )?;
-    }
+    // The attributes are encoded because it is simpler to work with
+    // (implementing Copy means they use no lifetimes) and can be used for
+    // formula evaluation in a simpler way. Attribute identifiers as usize also
+    // allow (ab-)using Vecs as HashMaps.
 
-    {
-        let mut guard = OBJECT_ATTRIBUTES.lock();
-        guard.reserve(2, GFP_KERNEL)?;
-        guard.push(
-            ObjectAttribution {
-                object: c_str!("/home/dabac_rs/a"),
-                attr: kvec![
-                    (c_str!("protection"), c_str!("secret")),
-                    (c_str!("type"), c_str!("pdf"))
-                ]?,
-            },
-            GFP_KERNEL,
-        )?;
-        guard.push(
-            ObjectAttribution {
-                object: c_str!("/home/dabac_rs/b"),
-                attr: kvec![
-                    (c_str!("protection"), c_str!("open")),
-                    (c_str!("type"), c_str!("doc"))
-                ]?,
-            },
-            GFP_KERNEL,
-        )?;
-    }
+    let mut guard = USER_ATTRIBUTES.lock();
+    guard.push(
+        UserAttribution {
+            user: 0,
+            attr: kvec![(ATTR_ROLE, VALUE_ADMIN), (ATTR_GROUP, VALUE_SOFTWARE)]?,
+        },
+        GFP_KERNEL,
+    )?;
+    guard.push(
+        UserAttribution {
+            user: 1000,
+            attr: kvec![(ATTR_ROLE, VALUE_USER), (ATTR_GROUP, VALUE_SALES)]?,
+        },
+        GFP_KERNEL,
+    )?;
+
+    let mut guard = OBJECT_ATTRIBUTES.lock();
+    guard.push(
+        ObjectAttribution {
+            object: c_str!("/home/dabac_rs/a"),
+            attr: kvec![(ATTR_PROTECTION, VALUE_SECRET), (ATTR_TYPE, VALUE_PDF)]?,
+        },
+        GFP_KERNEL,
+    )?;
+    guard.push(
+        ObjectAttribution {
+            object: c_str!("/home/dabac_rs/b"),
+            attr: kvec![(ATTR_PROTECTION, VALUE_OPEN), (ATTR_TYPE, VALUE_DOC)]?,
+        },
+        GFP_KERNEL,
+    )?;
 
     Ok(())
 }
@@ -222,4 +210,39 @@ fn remove_object_attribution(
     }
 
     Ok(())
+}
+
+/// Temporary place to store encoded attribute and value identifiers
+pub(crate) mod constants {
+    // User attribute identifiers:
+    // - 0 => "role"
+    // - 1 => "group"
+    pub(crate) const ATTR_ROLE: usize = 0;
+    pub(crate) const ATTR_GROUP: usize = 1;
+
+    // User attribute values:
+    // - 0 => "admin"
+    // - 1 => "user"
+    // - 2 => "software"
+    // - 3 => "sales"
+    pub(crate) const VALUE_ADMIN: i32 = 0;
+    pub(crate) const VALUE_USER: i32 = 1;
+    pub(crate) const VALUE_SOFTWARE: i32 = 2;
+    pub(crate) const VALUE_SALES: i32 = 3;
+
+    // Object attribute identifiers:
+    // - 0 => "protection"
+    // - 1 => "type"
+    pub(crate) const ATTR_PROTECTION: usize = 0;
+    pub(crate) const ATTR_TYPE: usize = 1;
+
+    // Object attribute values:
+    // - 0 => "secret"
+    // - 1 => "open"
+    // - 2 => "pdf"
+    // - 3 => "doc"
+    pub(crate) const VALUE_SECRET: i32 = 0;
+    pub(crate) const VALUE_OPEN: i32 = 1;
+    pub(crate) const VALUE_PDF: i32 = 2;
+    pub(crate) const VALUE_DOC: i32 = 3;
 }

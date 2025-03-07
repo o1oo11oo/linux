@@ -9,7 +9,7 @@ use kernel::{c_str, fs::File, kvec, pr_info, prelude::*, sync::global_lock, task
 use crate::{
     epp::{self, PolicyChange},
     helpers,
-    pip::{self, ObjectAttribution, UserAttribution},
+    pip::{self, constants::*, ObjectAttribution, UserAttribution},
     AVP,
 };
 
@@ -47,23 +47,27 @@ pub(crate) fn init() -> Result<()> {
     // SAFETY: Called exactly once.
     unsafe { POLICY.init() };
 
+    // The attributes are encoded because it is simpler to work with
+    // (implementing Copy means they use no lifetimes) and can be used for
+    // formula evaluation in a simpler way. Attribute identifiers as usize also
+    // allow (ab-)using Vecs as HashMaps. See PIP for an int => string mapping.
+
     let mut guard = POLICY.lock();
-    guard.rules.reserve(3, GFP_KERNEL)?;
     guard.rules.push(
         Rule {
             pre: PreCondition {
-                user_attr: kvec![(c_str!("role"), c_str!("admin"))]?,
-                object_attr: kvec![(c_str!("protection"), c_str!("secret"))]?,
+                user_attr: kvec![(ATTR_ROLE, VALUE_ADMIN)]?,
+                object_attr: kvec![(ATTR_PROTECTION, VALUE_SECRET)]?,
             },
             post: PostCondition {
                 changes: kvec![
                     PolicyChange::RemoveObjectAttribution(ObjectAttribution {
                         object: c_str!("/home/dabac_rs/a"),
-                        attr: kvec![(c_str!("protection"), c_str!("secret"))]?,
+                        attr: kvec![(ATTR_PROTECTION, VALUE_SECRET)]?,
                     }),
                     PolicyChange::AddObjectAttribution(ObjectAttribution {
                         object: c_str!("/home/dabac_rs/a"),
-                        attr: kvec![(c_str!("protection"), c_str!("open"))]?,
+                        attr: kvec![(ATTR_PROTECTION, VALUE_OPEN)]?,
                     }),
                 ]?,
             },
@@ -73,18 +77,18 @@ pub(crate) fn init() -> Result<()> {
     guard.rules.push(
         Rule {
             pre: PreCondition {
-                user_attr: kvec![(c_str!("role"), c_str!("admin"))]?,
-                object_attr: kvec![(c_str!("protection"), c_str!("open"))]?,
+                user_attr: kvec![(ATTR_ROLE, VALUE_ADMIN)]?,
+                object_attr: kvec![(ATTR_PROTECTION, VALUE_OPEN)]?,
             },
             post: PostCondition {
                 changes: kvec![
                     PolicyChange::AddUserAttribution(UserAttribution {
                         user: 1000,
-                        attr: kvec![(c_str!("role"), c_str!("admin"))]?,
+                        attr: kvec![(ATTR_ROLE, VALUE_ADMIN)]?,
                     }),
                     PolicyChange::RemoveUserAttribution(UserAttribution {
                         user: 1000,
-                        attr: kvec![(c_str!("role"), c_str!("admin"))]?,
+                        attr: kvec![(ATTR_ROLE, VALUE_ADMIN)]?,
                     }),
                 ]?,
             },
@@ -94,8 +98,8 @@ pub(crate) fn init() -> Result<()> {
     guard.rules.push(
         Rule {
             pre: PreCondition {
-                user_attr: kvec![(c_str!("role"), c_str!("user"))]?,
-                object_attr: kvec![(c_str!("protection"), c_str!("open"))]?,
+                user_attr: kvec![(ATTR_ROLE, VALUE_USER)]?,
+                object_attr: kvec![(ATTR_PROTECTION, VALUE_OPEN)]?,
             },
             post: PostCondition { changes: kvec![] },
         },
