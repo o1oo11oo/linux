@@ -7,7 +7,8 @@
 use kernel::{c_str, fs::File, kvec, pr_info, prelude::*, sync::global_lock, task::Kuid};
 
 use crate::{
-    epp, helpers,
+    epp::{self, PolicyChange},
+    helpers,
     pip::{self, ObjectAttribution, UserAttribution},
     AVP,
 };
@@ -27,7 +28,7 @@ struct Policy {
 #[derive(Debug)]
 struct Rule {
     pre: PreCondition,
-    post: Option<PostCondition>,
+    post: PostCondition,
 }
 
 #[derive(Debug)]
@@ -38,8 +39,7 @@ struct PreCondition {
 
 #[derive(Debug)]
 pub(crate) struct PostCondition {
-    pub(crate) user_attr: KVec<UserAttribution>,
-    pub(crate) object_attr: KVec<ObjectAttribution>,
+    pub(crate) changes: KVec<PolicyChange>,
 }
 
 /// Initialize the PDP during LSM initialization
@@ -55,13 +55,18 @@ pub(crate) fn init() -> Result<()> {
                 user_attr: kvec![(c_str!("role"), c_str!("admin"))]?,
                 object_attr: kvec![(c_str!("protection"), c_str!("secret"))]?,
             },
-            post: Some(PostCondition {
-                user_attr: kvec![],
-                object_attr: kvec![ObjectAttribution {
-                    object: c_str!("/home/dabac_rs/a"),
-                    attr: kvec![(c_str!("protection"), c_str!("open"))]?,
-                }]?,
-            }),
+            post: PostCondition {
+                changes: kvec![
+                    PolicyChange::RemoveObjectAttribution(ObjectAttribution {
+                        object: c_str!("/home/dabac_rs/a"),
+                        attr: kvec![(c_str!("protection"), c_str!("secret"))]?,
+                    }),
+                    PolicyChange::AddObjectAttribution(ObjectAttribution {
+                        object: c_str!("/home/dabac_rs/a"),
+                        attr: kvec![(c_str!("protection"), c_str!("open"))]?,
+                    }),
+                ]?,
+            },
         },
         GFP_KERNEL,
     )?;
@@ -71,7 +76,18 @@ pub(crate) fn init() -> Result<()> {
                 user_attr: kvec![(c_str!("role"), c_str!("admin"))]?,
                 object_attr: kvec![(c_str!("protection"), c_str!("open"))]?,
             },
-            post: None,
+            post: PostCondition {
+                changes: kvec![
+                    PolicyChange::AddUserAttribution(UserAttribution {
+                        user: 1000,
+                        attr: kvec![(c_str!("role"), c_str!("admin"))]?,
+                    }),
+                    PolicyChange::RemoveUserAttribution(UserAttribution {
+                        user: 1000,
+                        attr: kvec![(c_str!("role"), c_str!("admin"))]?,
+                    }),
+                ]?,
+            },
         },
         GFP_KERNEL,
     )?;
@@ -81,7 +97,7 @@ pub(crate) fn init() -> Result<()> {
                 user_attr: kvec![(c_str!("role"), c_str!("user"))]?,
                 object_attr: kvec![(c_str!("protection"), c_str!("open"))]?,
             },
-            post: None,
+            post: PostCondition { changes: kvec![] },
         },
         GFP_KERNEL,
     )?;
@@ -132,8 +148,8 @@ fn resolve(u_attr: &[AVP], o_attr: &[AVP]) -> Result<bool> {
         r.pre.user_attr.iter().all(|u| u_attr.contains(u))
             && r.pre.object_attr.iter().all(|o| o_attr.contains(o))
     }) {
-        if let Some(post) = &rule.post {
-            epp::execute_postcondition(post)?;
+        if !rule.post.changes.is_empty() {
+            epp::execute_postcondition(&rule.post)?;
         }
 
         return Ok(true);

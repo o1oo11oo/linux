@@ -6,7 +6,7 @@
 
 use kernel::{bindings::uid_t, c_str, global_lock, kvec, prelude::*, str::CStr};
 
-use crate::{helpers::vec_clone, AVP};
+use crate::{epp::PolicyChange, helpers::vec_clone, AVP};
 
 global_lock! {
     // SAFETY: Initialized in LSM initializer before first use.
@@ -122,38 +122,102 @@ pub(crate) fn get_object_attributes(path: &CStr) -> Result<KVec<AVP>> {
 ///
 /// This updates both types of attributes in one function and locks both mutexes
 /// at the same time to guarantee atomic policy updates.
-pub(crate) fn add_attributes(
-    user_additions: &[UserAttribution],
-    object_additions: &[ObjectAttribution],
-) -> Result<()> {
+pub(crate) fn execute_postcondition(changes: &[PolicyChange]) -> Result<()> {
     let mut user_attr = USER_ATTRIBUTES.lock();
     let mut object_attr = OBJECT_ATTRIBUTES.lock();
 
-    for addition in user_additions {
-        if let Some(entry) = user_attr.iter_mut().find(|u| u.user == addition.user) {
-            entry.attr.extend_from_slice(&addition.attr, GFP_KERNEL)?;
-        } else {
-            user_attr.push(
-                UserAttribution {
-                    user: addition.user,
-                    attr: vec_clone(&addition.attr, GFP_KERNEL)?,
-                },
-                GFP_KERNEL,
-            )?;
+    for change in changes {
+        match change {
+            PolicyChange::AddUserAttribution(addition) => {
+                add_user_attribution(&mut *user_attr, addition)?
+            }
+            PolicyChange::RemoveUserAttribution(removal) => {
+                remove_user_attribution(&mut *user_attr, removal)?
+            }
+            PolicyChange::AddObjectAttribution(addition) => {
+                add_object_attribution(&mut *object_attr, addition)?
+            }
+            PolicyChange::RemoveObjectAttribution(removal) => {
+                remove_object_attribution(&mut *object_attr, removal)?
+            }
         }
     }
 
-    for addition in object_additions {
-        if let Some(entry) = object_attr.iter_mut().find(|o| o.object == addition.object) {
-            entry.attr.extend_from_slice(&addition.attr, GFP_KERNEL)?;
-        } else {
-            object_attr.push(
-                ObjectAttribution {
-                    object: addition.object,
-                    attr: vec_clone(&addition.attr, GFP_KERNEL)?,
-                },
-                GFP_KERNEL,
-            )?;
+    Ok(())
+}
+
+fn add_user_attribution(
+    user_attr: &mut KVec<UserAttribution>,
+    addition: &UserAttribution,
+) -> Result<()> {
+    if let Some(entry) = user_attr.iter_mut().find(|u| u.user == addition.user) {
+        entry.attr.extend_from_slice(&addition.attr, GFP_KERNEL)?
+    } else {
+        user_attr.push(
+            UserAttribution {
+                user: addition.user,
+                attr: vec_clone(&addition.attr, GFP_KERNEL)?,
+            },
+            GFP_KERNEL,
+        )?
+    }
+
+    Ok(())
+}
+
+fn remove_user_attribution(
+    user_attr: &mut [UserAttribution],
+    removal: &UserAttribution,
+) -> Result<()> {
+    if let Some(entry) = user_attr.iter_mut().find(|u| u.user == removal.user) {
+        // kernel::Vec has no retain(), so this is a bit less efficient
+        // filter to only keep the items not contained in the removal collection
+        let mut replacement = kvec![];
+        core::mem::swap(&mut entry.attr, &mut replacement);
+        for item in replacement
+            .into_iter()
+            .filter(|a| !removal.attr.contains(a))
+        {
+            entry.attr.push(item, GFP_KERNEL)?;
+        }
+    }
+
+    Ok(())
+}
+
+fn add_object_attribution(
+    object_attr: &mut KVec<ObjectAttribution>,
+    addition: &ObjectAttribution,
+) -> Result<()> {
+    if let Some(entry) = object_attr.iter_mut().find(|o| o.object == addition.object) {
+        entry.attr.extend_from_slice(&addition.attr, GFP_KERNEL)?
+    } else {
+        object_attr.push(
+            ObjectAttribution {
+                object: addition.object,
+                attr: vec_clone(&addition.attr, GFP_KERNEL)?,
+            },
+            GFP_KERNEL,
+        )?
+    }
+
+    Ok(())
+}
+
+fn remove_object_attribution(
+    object_attr: &mut [ObjectAttribution],
+    removal: &ObjectAttribution,
+) -> Result<()> {
+    if let Some(entry) = object_attr.iter_mut().find(|u| u.object == removal.object) {
+        // kernel::Vec has no retain(), so this is a bit less efficient
+        // filter to only keep the items not contained in the removal collection
+        let mut replacement = kvec![];
+        core::mem::swap(&mut entry.attr, &mut replacement);
+        for item in replacement
+            .into_iter()
+            .filter(|a| !removal.attr.contains(a))
+        {
+            entry.attr.push(item, GFP_KERNEL)?;
         }
     }
 
