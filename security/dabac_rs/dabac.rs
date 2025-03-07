@@ -5,6 +5,7 @@
 //! Rust-based LSM that implements a dynamic ABAC policy.
 
 mod bindings;
+mod epp;
 mod helpers;
 mod pdp;
 mod pip;

@@ -6,7 +6,7 @@
 
 use kernel::{bindings::uid_t, c_str, global_lock, kvec, prelude::*, str::CStr};
 
-use crate::AVP;
+use crate::{helpers::vec_clone, AVP};
 
 global_lock! {
     // SAFETY: Initialized in LSM initializer before first use.
@@ -18,14 +18,16 @@ global_lock! {
     unsafe(uninit) static OBJECT_ATTRIBUTES: Mutex<KVec<ObjectAttribution>> = KVec::new();
 }
 
-struct UserAttribution {
-    user: uid_t,
-    attr: KVec<AVP>,
+#[derive(Debug)]
+pub(crate) struct UserAttribution {
+    pub(crate) user: uid_t,
+    pub(crate) attr: KVec<AVP>,
 }
 
-struct ObjectAttribution {
-    object: &'static CStr,
-    attr: KVec<AVP>,
+#[derive(Debug)]
+pub(crate) struct ObjectAttribution {
+    pub(crate) object: &'static CStr,
+    pub(crate) attr: KVec<AVP>,
 }
 
 /// Initialize the PDP during LSM initialization
@@ -114,4 +116,46 @@ pub(crate) fn get_object_attributes(path: &CStr) -> Result<KVec<AVP>> {
         GFP_KERNEL,
     )?;
     Ok(buf)
+}
+
+/// Add new AVPs from post-conditions, called by EPP.
+///
+/// This updates both types of attributes in one function and locks both mutexes
+/// at the same time to guarantee atomic policy updates.
+pub(crate) fn add_attributes(
+    user_additions: &[UserAttribution],
+    object_additions: &[ObjectAttribution],
+) -> Result<()> {
+    let mut user_attr = USER_ATTRIBUTES.lock();
+    let mut object_attr = OBJECT_ATTRIBUTES.lock();
+
+    for addition in user_additions {
+        if let Some(entry) = user_attr.iter_mut().find(|u| u.user == addition.user) {
+            entry.attr.extend_from_slice(&addition.attr, GFP_KERNEL)?;
+        } else {
+            user_attr.push(
+                UserAttribution {
+                    user: addition.user,
+                    attr: vec_clone(&addition.attr, GFP_KERNEL)?,
+                },
+                GFP_KERNEL,
+            )?;
+        }
+    }
+
+    for addition in object_additions {
+        if let Some(entry) = object_attr.iter_mut().find(|o| o.object == addition.object) {
+            entry.attr.extend_from_slice(&addition.attr, GFP_KERNEL)?;
+        } else {
+            object_attr.push(
+                ObjectAttribution {
+                    object: addition.object,
+                    attr: vec_clone(&addition.attr, GFP_KERNEL)?,
+                },
+                GFP_KERNEL,
+            )?;
+        }
+    }
+
+    Ok(())
 }

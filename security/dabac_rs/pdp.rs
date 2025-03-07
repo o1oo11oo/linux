@@ -6,7 +6,11 @@
 
 use kernel::{c_str, fs::File, kvec, pr_info, prelude::*, sync::global_lock, task::Kuid};
 
-use crate::{helpers, pip, AVP};
+use crate::{
+    epp, helpers,
+    pip::{self, ObjectAttribution, UserAttribution},
+    AVP,
+};
 
 const PROTECTED_PATH: &CStr = c_str!("/home/dabac_rs/");
 
@@ -15,13 +19,27 @@ global_lock! {
     unsafe(uninit) static POLICY: Mutex<Policy> = Policy {rules: KVec::new()};
 }
 
+#[derive(Debug)]
 struct Policy {
     rules: KVec<Rule>,
 }
 
+#[derive(Debug)]
 struct Rule {
+    pre: PreCondition,
+    post: Option<PostCondition>,
+}
+
+#[derive(Debug)]
+struct PreCondition {
     user_attr: KVec<AVP>,
     object_attr: KVec<AVP>,
+}
+
+#[derive(Debug)]
+pub(crate) struct PostCondition {
+    pub(crate) user_attr: KVec<UserAttribution>,
+    pub(crate) object_attr: KVec<ObjectAttribution>,
 }
 
 /// Initialize the PDP during LSM initialization
@@ -33,22 +51,37 @@ pub(crate) fn init() -> Result<()> {
     guard.rules.reserve(3, GFP_KERNEL)?;
     guard.rules.push(
         Rule {
-            user_attr: kvec![(c_str!("role"), c_str!("admin"))]?,
-            object_attr: kvec![(c_str!("protection"), c_str!("secret"))]?,
+            pre: PreCondition {
+                user_attr: kvec![(c_str!("role"), c_str!("admin"))]?,
+                object_attr: kvec![(c_str!("protection"), c_str!("secret"))]?,
+            },
+            post: Some(PostCondition {
+                user_attr: kvec![],
+                object_attr: kvec![ObjectAttribution {
+                    object: c_str!("/home/dabac_rs/a"),
+                    attr: kvec![(c_str!("protection"), c_str!("open"))]?,
+                }]?,
+            }),
         },
         GFP_KERNEL,
     )?;
     guard.rules.push(
         Rule {
-            user_attr: kvec![(c_str!("role"), c_str!("admin"))]?,
-            object_attr: kvec![(c_str!("protection"), c_str!("open"))]?,
+            pre: PreCondition {
+                user_attr: kvec![(c_str!("role"), c_str!("admin"))]?,
+                object_attr: kvec![(c_str!("protection"), c_str!("open"))]?,
+            },
+            post: None,
         },
         GFP_KERNEL,
     )?;
     guard.rules.push(
         Rule {
-            user_attr: kvec![(c_str!("role"), c_str!("user"))]?,
-            object_attr: kvec![(c_str!("protection"), c_str!("open"))]?,
+            pre: PreCondition {
+                user_attr: kvec![(c_str!("role"), c_str!("user"))]?,
+                object_attr: kvec![(c_str!("protection"), c_str!("open"))]?,
+            },
+            post: None,
         },
         GFP_KERNEL,
     )?;
@@ -75,7 +108,7 @@ pub(crate) fn file_permission(file: &File, _mask: i32) -> Result<bool> {
     pr_info!("User {uid} (attr: {u_attr:?}) ist trying to access {full_name:?} (attr: {o_attr:?})");
 
     // Check policy for protected files
-    let resolution = resolve(&u_attr, &o_attr);
+    let resolution = resolve(&u_attr, &o_attr)?;
 
     if resolution {
         pr_info!("Access granted");
@@ -92,11 +125,21 @@ pub(crate) fn file_permission(file: &File, _mask: i32) -> Result<bool> {
 /// the user   needs to have at least the user   AVPs required by the rule and
 /// the object needs to have at least the object AVPs required by the rule.
 /// The values of the attributes need to be equal.
-fn resolve(u_attr: &[AVP], o_attr: &[AVP]) -> bool {
-    POLICY.lock().rules.iter().any(|r| {
-        r.user_attr.iter().all(|u| u_attr.contains(u))
-            && r.object_attr.iter().all(|o| o_attr.contains(o))
-    })
+///
+/// If a rule matches, its post-condition is executed by the EPP, if one exists.
+fn resolve(u_attr: &[AVP], o_attr: &[AVP]) -> Result<bool> {
+    if let Some(rule) = POLICY.lock().rules.iter().find(|&r| {
+        r.pre.user_attr.iter().all(|u| u_attr.contains(u))
+            && r.pre.object_attr.iter().all(|o| o_attr.contains(o))
+    }) {
+        if let Some(post) = &rule.post {
+            epp::execute_postcondition(post)?;
+        }
+
+        return Ok(true);
+    }
+
+    return Ok(false);
 }
 
 fn is_protected(name: &CStr) -> bool {

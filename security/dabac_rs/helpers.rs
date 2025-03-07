@@ -6,6 +6,7 @@
 //! here for now.
 
 use kernel::{
+    alloc::Flags,
     bindings::{dentry_path_raw, PATH_MAX},
     fs::File,
     kvec,
@@ -27,4 +28,10 @@ pub(crate) fn file_get_full_name(file: &File) -> Result<CString> {
     let dentry = unsafe { (*file.as_ptr()).f_path.dentry };
     let full_name = unsafe { dentry_path_raw(dentry, buf.as_mut_ptr(), buf.len() as _) };
     Ok(unsafe { CStr::from_char_ptr(full_name as _) }.try_into()?)
+}
+
+pub(crate) fn vec_clone<T: Clone>(src: &KVec<T>, flags: Flags) -> Result<KVec<T>> {
+    let mut cp = kvec![];
+    cp.extend_from_slice(src, flags)?;
+    Ok(cp)
 }
