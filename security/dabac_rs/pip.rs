@@ -4,8 +4,15 @@
 //!
 //! Policy Information Point for Rust-based DABAC LSM.
 
+use core::str::FromStr;
+
 use constants::*;
-use kernel::{bindings::uid_t, c_str, global_lock, kvec, prelude::*, str::CStr};
+use kernel::{
+    bindings::uid_t,
+    c_str, global_lock, kvec,
+    prelude::*,
+    str::{CStr, CString},
+};
 
 use crate::{epp::PolicyChange, helpers::vec_clone};
 
@@ -31,10 +38,38 @@ pub(crate) struct UserAttribution {
     pub(crate) attr: Attributions,
 }
 
+impl FromStr for UserAttribution {
+    type Err = Error;
+
+    fn from_str(s: &str) -> core::result::Result<Self, Self::Err> {
+        match s.trim().split_once(':') {
+            None => Err(EINVAL),
+            Some((uid, attr)) => Ok(Self {
+                user: uid.parse()?,
+                attr: attr.parse()?,
+            }),
+        }
+    }
+}
+
 #[derive(Debug)]
 pub(crate) struct ObjectAttribution {
-    pub(crate) object: &'static CStr,
+    pub(crate) object: CString,
     pub(crate) attr: Attributions,
+}
+
+impl FromStr for ObjectAttribution {
+    type Err = Error;
+
+    fn from_str(s: &str) -> core::result::Result<Self, Self::Err> {
+        match s.trim().split_once(':') {
+            None => Err(EINVAL),
+            Some((object, attr)) => Ok(Self {
+                object: object.try_into()?,
+                attr: attr.parse()?,
+            }),
+        }
+    }
 }
 
 #[derive(Debug)]
@@ -47,6 +82,25 @@ impl Attributions {
         self.inner
             .iter()
             .find_map(|&(i, v)| (i == identifier).then_some(v))
+    }
+}
+
+impl FromStr for Attributions {
+    type Err = Error;
+
+    fn from_str(s: &str) -> core::result::Result<Self, Self::Err> {
+        let s = s.trim();
+        if s.is_empty() {
+            return Ok(Self { inner: kvec![] });
+        }
+
+        let mut attrs = kvec![];
+        for attr in s.split('&') {
+            let (i, v) = attr.split_once('=').ok_or(EINVAL)?;
+            attrs.push((i.parse()?, v.parse()?), GFP_KERNEL)?;
+        }
+
+        Ok(Self { inner: attrs })
     }
 }
 
@@ -85,7 +139,7 @@ pub(crate) fn init() -> Result<()> {
     let mut guard = OBJECT_ATTRIBUTES.lock();
     guard.push(
         ObjectAttribution {
-            object: c_str!("/home/dabac_rs/a"),
+            object: c_str!("/home/dabac_rs/a").try_into()?,
             attr: Attributions {
                 inner: kvec![(ATTR_PROTECTION, VALUE_SECRET), (ATTR_TYPE, VALUE_PDF)]?,
             },
@@ -94,7 +148,7 @@ pub(crate) fn init() -> Result<()> {
     )?;
     guard.push(
         ObjectAttribution {
-            object: c_str!("/home/dabac_rs/b"),
+            object: c_str!("/home/dabac_rs/b").try_into()?,
             attr: Attributions {
                 inner: kvec![(ATTR_PROTECTION, VALUE_OPEN), (ATTR_TYPE, VALUE_DOC)]?,
             },
@@ -123,7 +177,7 @@ pub(crate) fn get_object_attributes(path: &CStr) -> Result<Attributions> {
     let guard = OBJECT_ATTRIBUTES.lock();
     let avps = guard
         .iter()
-        .find_map(|o| (o.object == path).then_some(o.attr.inner.as_ref()))
+        .find_map(|o| (*o.object == *path).then_some(o.attr.inner.as_ref()))
         .unwrap_or_default();
 
     Ok(Attributions {
@@ -215,7 +269,7 @@ fn add_object_attribution(
     } else {
         object_attr.push(
             ObjectAttribution {
-                object: addition.object,
+                object: (*addition.object).try_into()?,
                 attr: Attributions {
                     inner: vec_clone(&addition.attr.inner, GFP_KERNEL)?,
                 },

@@ -819,6 +819,7 @@ impl fmt::Write for Formatter {
 /// assert_eq!(s.is_ok(), false);
 /// # Ok::<(), kernel::error::Error>(())
 /// ```
+#[derive(PartialEq, Eq)]
 pub struct CString {
     buf: KVec<u8>,
 }
@@ -886,6 +887,29 @@ impl<'a> TryFrom<&'a CStr> for CString {
 
         // INVARIANT: The `CStr` and `CString` types have the same invariants for
         // the string data, and we copied it over without changes.
+        Ok(CString { buf })
+    }
+}
+
+impl<'a> TryFrom<&'a str> for CString {
+    type Error = Error;
+
+    fn try_from(src: &'a str) -> Result<CString, Self::Error> {
+        let src = src.as_bytes();
+
+        // Check for other NUL bytes, CString must contain exactly one at the end
+        if src.contains(&b'\0') {
+            return Err(EINVAL);
+        }
+
+        // Allocate space for the str and the additional NUL byte
+        let mut buf = KVec::with_capacity(src.len() + 1, GFP_KERNEL)?;
+
+        buf.extend_from_slice(src, GFP_KERNEL)?;
+        buf.push(b'\0', GFP_KERNEL)?;
+
+        // INVARIANT: We checked that the source string contained no NUL bytes
+        // and added one to the end.
         Ok(CString { buf })
     }
 }

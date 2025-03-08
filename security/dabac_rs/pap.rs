@@ -8,7 +8,7 @@ use core::str;
 
 use kernel::prelude::*;
 
-use crate::expr::Expression;
+use crate::pdp;
 
 pub(crate) fn update_user_attr(_attrs: &[u8]) -> Result<()> {
     pr_err!("Not implemented!");
@@ -22,11 +22,9 @@ pub(crate) fn update_object_attr(_attrs: &[u8]) -> Result<()> {
 
 pub(crate) fn update_policy(policy: &[u8]) -> Result<()> {
     // TODO: check for policy replacement permissions
-    let policy = str::from_utf8(policy)?;
-    let policy: Expression = policy.parse()?;
-    pr_info!("Update policy called with: {policy:?}");
-
-    // TODO add parser for post-conditions so that the policy can actually be updated
+    let policy = str::from_utf8(policy)?.parse()?;
+    pr_info!("Updating policy to: {policy:?}");
+    pdp::set_policy(policy);
 
     Ok(())
 }

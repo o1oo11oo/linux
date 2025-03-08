@@ -4,13 +4,15 @@
 //!
 //! Policy Decision Point for Rust-based DABAC LSM.
 
+use core::str::FromStr;
+
 use kernel::{c_str, fs::File, kvec, pr_info, prelude::*, sync::global_lock, task::Kuid};
 
 use crate::{
     epp::{self, PolicyChange},
     expr::Expression,
     helpers,
-    pip::{self, constants::*, Attributions, ObjectAttribution, UserAttribution},
+    pip::{self, Attributions},
 };
 
 const PROTECTED_PATH: &CStr = c_str!("/home/dabac_rs/");
@@ -21,8 +23,25 @@ global_lock! {
 }
 
 #[derive(Debug)]
-struct Policy {
+pub(crate) struct Policy {
     rules: KVec<Rule>,
+}
+
+impl FromStr for Policy {
+    type Err = Error;
+
+    fn from_str(s: &str) -> core::result::Result<Self, Self::Err> {
+        let s = s.trim();
+        if s.is_empty() {
+            return Ok(Self { rules: kvec![] });
+        }
+
+        let mut rules = kvec![];
+        for rule in s.split(';') {
+            rules.push(rule.parse()?, GFP_KERNEL)?;
+        }
+        Ok(Self { rules })
+    }
 }
 
 #[derive(Debug)]
@@ -31,14 +50,58 @@ struct Rule {
     post: PostCondition,
 }
 
+impl FromStr for Rule {
+    type Err = Error;
+
+    fn from_str(s: &str) -> core::result::Result<Self, Self::Err> {
+        match s.trim().split_once("=>") {
+            None => Ok(Self {
+                pre: s.parse()?,
+                post: PostCondition { changes: kvec![] },
+            }),
+            Some((pre, post)) => Ok(Self {
+                pre: pre.parse()?,
+                post: post.parse()?,
+            }),
+        }
+    }
+}
+
 #[derive(Debug)]
 struct PreCondition {
     formula: Expression,
 }
 
+impl FromStr for PreCondition {
+    type Err = Error;
+
+    fn from_str(s: &str) -> core::result::Result<Self, Self::Err> {
+        Ok(Self {
+            formula: s.trim().parse()?,
+        })
+    }
+}
+
 #[derive(Debug)]
 pub(crate) struct PostCondition {
     pub(crate) changes: KVec<PolicyChange>,
+}
+
+impl FromStr for PostCondition {
+    type Err = Error;
+
+    fn from_str(s: &str) -> core::result::Result<Self, Self::Err> {
+        let s = s.trim();
+        if s.is_empty() {
+            return Ok(Self { changes: kvec![] });
+        }
+
+        let mut changes = kvec![];
+        for change in s.split(',') {
+            changes.push(change.parse()?, GFP_KERNEL)?;
+        }
+        Ok(Self { changes })
+    }
 }
 
 /// Initialize the PDP during LSM initialization
@@ -51,66 +114,18 @@ pub(crate) fn init() -> Result<()> {
     // formula evaluation in a simpler way. Attribute identifiers as usize also
     // allow (ab-)using Vecs as HashMaps. See PIP for an int => string mapping.
 
-    let mut guard = POLICY.lock();
-    guard.rules.push(
-        Rule {
-            pre: PreCondition {
-                formula: "u0=c0 & o0=c0".parse()?,
-            },
-            post: PostCondition {
-                changes: kvec![
-                    PolicyChange::RemoveObjectAttribution(ObjectAttribution {
-                        object: c_str!("/home/dabac_rs/a"),
-                        attr: Attributions {
-                            inner: kvec![(ATTR_PROTECTION, VALUE_SECRET)]?
-                        },
-                    }),
-                    PolicyChange::AddObjectAttribution(ObjectAttribution {
-                        object: c_str!("/home/dabac_rs/a"),
-                        attr: Attributions {
-                            inner: kvec![(ATTR_PROTECTION, VALUE_OPEN)]?
-                        },
-                    }),
-                ]?,
-            },
-        },
-        GFP_KERNEL,
-    )?;
-    guard.rules.push(
-        Rule {
-            pre: PreCondition {
-                formula: "u0=c0 & o0=c1".parse()?,
-            },
-            post: PostCondition {
-                changes: kvec![
-                    PolicyChange::AddUserAttribution(UserAttribution {
-                        user: 1000,
-                        attr: Attributions {
-                            inner: kvec![(ATTR_ROLE, VALUE_ADMIN)]?
-                        },
-                    }),
-                    PolicyChange::RemoveUserAttribution(UserAttribution {
-                        user: 1000,
-                        attr: Attributions {
-                            inner: kvec![(ATTR_ROLE, VALUE_ADMIN)]?
-                        },
-                    }),
-                ]?,
-            },
-        },
-        GFP_KERNEL,
-    )?;
-    guard.rules.push(
-        Rule {
-            pre: PreCondition {
-                formula: "u0=c1 & o0=c1".parse()?,
-            },
-            post: PostCondition { changes: kvec![] },
-        },
-        GFP_KERNEL,
-    )?;
+    let policy = "u0=c0 & o0=c0 => -o /home/dabac_rs/a: 0=0, +o /home/dabac_rs/a: 0=1;
+        u0=c0 & o0=c1 => +u 1000: 0=0, -u 1000: 0=0;
+        u0=c1 & o0=c1 =>"
+        .parse()?;
+    set_policy(policy);
 
     Ok(())
+}
+
+pub(crate) fn set_policy(policy: Policy) {
+    let mut guard = POLICY.lock();
+    *guard = policy;
 }
 
 /// Rust implementation of the file_permission hook.
