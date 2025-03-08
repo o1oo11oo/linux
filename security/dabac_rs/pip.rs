@@ -6,10 +6,9 @@
 
 use core::str::FromStr;
 
-use constants::*;
 use kernel::{
     bindings::uid_t,
-    c_str, global_lock, kvec,
+    global_lock, kvec,
     prelude::*,
     str::{CStr, CString},
 };
@@ -18,12 +17,12 @@ use crate::{epp::PolicyChange, helpers::vec_clone};
 
 global_lock! {
     // SAFETY: Initialized in LSM initializer before first use.
-    unsafe(uninit) static USER_ATTRIBUTES: Mutex<KVec<UserAttribution>> = KVec::new();
+    unsafe(uninit) static USER_ATTRIBUTES: Mutex<UserAttributes> = UserAttributes { attr: KVec::new() };
 }
 
 global_lock! {
     // SAFETY: Initialized in LSM initializer before first use.
-    unsafe(uninit) static OBJECT_ATTRIBUTES: Mutex<KVec<ObjectAttribution>> = KVec::new();
+    unsafe(uninit) static OBJECT_ATTRIBUTES: Mutex<ObjectAttributes> = ObjectAttributes { attr: KVec::new() };
 }
 
 /// An Attribute-Value Pair (AVP) combines an attribute "name" and its value.
@@ -31,6 +30,29 @@ global_lock! {
 /// For simplicity the name is encoded as an identifier and values only allow
 /// integers, which are easier to work with in equations.
 type AVP = (usize, i32);
+
+#[derive(Debug)]
+pub(crate) struct UserAttributes {
+    pub(crate) attr: KVec<UserAttribution>,
+}
+
+impl FromStr for UserAttributes {
+    type Err = Error;
+
+    fn from_str(s: &str) -> core::result::Result<Self, Self::Err> {
+        let s = s.trim();
+        if s.is_empty() {
+            return Ok(Self { attr: kvec![] });
+        }
+
+        let mut attrs = kvec![];
+        for attr in s.split(',') {
+            attrs.push(attr.parse()?, GFP_KERNEL)?;
+        }
+
+        Ok(Self { attr: attrs })
+    }
+}
 
 #[derive(Debug)]
 pub(crate) struct UserAttribution {
@@ -49,6 +71,29 @@ impl FromStr for UserAttribution {
                 attr: attr.parse()?,
             }),
         }
+    }
+}
+
+#[derive(Debug)]
+pub(crate) struct ObjectAttributes {
+    pub(crate) attr: KVec<ObjectAttribution>,
+}
+
+impl FromStr for ObjectAttributes {
+    type Err = Error;
+
+    fn from_str(s: &str) -> core::result::Result<Self, Self::Err> {
+        let s = s.trim();
+        if s.is_empty() {
+            return Ok(Self { attr: kvec![] });
+        }
+
+        let mut attrs = kvec![];
+        for attr in s.split(',') {
+            attrs.push(attr.parse()?, GFP_KERNEL)?;
+        }
+
+        Ok(Self { attr: attrs })
     }
 }
 
@@ -96,8 +141,8 @@ impl FromStr for Attributions {
 
         let mut attrs = kvec![];
         for attr in s.split('&') {
-            let (i, v) = attr.split_once('=').ok_or(EINVAL)?;
-            attrs.push((i.parse()?, v.parse()?), GFP_KERNEL)?;
+            let (i, v) = attr.trim().split_once('=').ok_or(EINVAL)?;
+            attrs.push((i.trim().parse()?, v.trim().parse()?), GFP_KERNEL)?;
         }
 
         Ok(Self { inner: attrs })
@@ -116,53 +161,50 @@ pub(crate) fn init() -> Result<()> {
     // formula evaluation in a simpler way. Attribute identifiers as usize also
     // allow (ab-)using Vecs as HashMaps.
 
-    let mut guard = USER_ATTRIBUTES.lock();
-    guard.push(
-        UserAttribution {
-            user: 0,
-            attr: Attributions {
-                inner: kvec![(ATTR_ROLE, VALUE_ADMIN), (ATTR_GROUP, VALUE_SOFTWARE)]?,
-            },
-        },
-        GFP_KERNEL,
-    )?;
-    guard.push(
-        UserAttribution {
-            user: 1000,
-            attr: Attributions {
-                inner: kvec![(ATTR_ROLE, VALUE_USER), (ATTR_GROUP, VALUE_SALES)]?,
-            },
-        },
-        GFP_KERNEL,
-    )?;
+    // User attribute identifiers:
+    // - 0 => "role"
+    // - 1 => "group"
 
-    let mut guard = OBJECT_ATTRIBUTES.lock();
-    guard.push(
-        ObjectAttribution {
-            object: c_str!("/home/dabac_rs/a").try_into()?,
-            attr: Attributions {
-                inner: kvec![(ATTR_PROTECTION, VALUE_SECRET), (ATTR_TYPE, VALUE_PDF)]?,
-            },
-        },
-        GFP_KERNEL,
-    )?;
-    guard.push(
-        ObjectAttribution {
-            object: c_str!("/home/dabac_rs/b").try_into()?,
-            attr: Attributions {
-                inner: kvec![(ATTR_PROTECTION, VALUE_OPEN), (ATTR_TYPE, VALUE_DOC)]?,
-            },
-        },
-        GFP_KERNEL,
-    )?;
+    // User attribute values:
+    // - 0 => "admin"
+    // - 1 => "user"
+    // - 2 => "software"
+    // - 3 => "sales"
+
+    // Object attribute identifiers:
+    // - 0 => "protection"
+    // - 1 => "type"
+
+    // Object attribute values:
+    // - 0 => "secret"
+    // - 1 => "open"
+    // - 2 => "pdf"
+    // - 3 => "doc"
+
+    let attrs = "0: 0=0 & 1=2, 1000: 0=1 & 1=3".parse()?;
+    set_user_attributes(attrs);
+
+    let attrs = "/home/dabac_rs/a: 0=0 & 1=2, /home/dabac_rs/b: 0=1 & 1=3".parse()?;
+    set_object_attributes(attrs);
 
     Ok(())
+}
+
+pub(crate) fn set_user_attributes(attrs: UserAttributes) {
+    let mut guard = USER_ATTRIBUTES.lock();
+    *guard = attrs;
+}
+
+pub(crate) fn set_object_attributes(attrs: ObjectAttributes) {
+    let mut guard = OBJECT_ATTRIBUTES.lock();
+    *guard = attrs;
 }
 
 /// Retrieve the Attributions for a specific user
 pub(crate) fn get_user_attributes(uid: uid_t) -> Result<Attributions> {
     let guard = USER_ATTRIBUTES.lock();
     let avps = guard
+        .attr
         .iter()
         .find_map(|u| (u.user == uid).then_some(u.attr.inner.as_ref()))
         .unwrap_or_default();
@@ -176,6 +218,7 @@ pub(crate) fn get_user_attributes(uid: uid_t) -> Result<Attributions> {
 pub(crate) fn get_object_attributes(path: &CStr) -> Result<Attributions> {
     let guard = OBJECT_ATTRIBUTES.lock();
     let avps = guard
+        .attr
         .iter()
         .find_map(|o| (*o.object == *path).then_some(o.attr.inner.as_ref()))
         .unwrap_or_default();
@@ -213,17 +256,14 @@ pub(crate) fn execute_postcondition(changes: &[PolicyChange]) -> Result<()> {
     Ok(())
 }
 
-fn add_user_attribution(
-    user_attr: &mut KVec<UserAttribution>,
-    addition: &UserAttribution,
-) -> Result<()> {
-    if let Some(entry) = user_attr.iter_mut().find(|u| u.user == addition.user) {
+fn add_user_attribution(user_attr: &mut UserAttributes, addition: &UserAttribution) -> Result<()> {
+    if let Some(entry) = user_attr.attr.iter_mut().find(|u| u.user == addition.user) {
         entry
             .attr
             .inner
             .extend_from_slice(&addition.attr.inner, GFP_KERNEL)?
     } else {
-        user_attr.push(
+        user_attr.attr.push(
             UserAttribution {
                 user: addition.user,
                 attr: Attributions {
@@ -238,10 +278,10 @@ fn add_user_attribution(
 }
 
 fn remove_user_attribution(
-    user_attr: &mut [UserAttribution],
+    user_attr: &mut UserAttributes,
     removal: &UserAttribution,
 ) -> Result<()> {
-    if let Some(entry) = user_attr.iter_mut().find(|u| u.user == removal.user) {
+    if let Some(entry) = user_attr.attr.iter_mut().find(|u| u.user == removal.user) {
         // kernel::Vec has no retain(), so this is a bit less efficient
         // filter to only keep the items not contained in the removal collection
         let mut replacement = kvec![];
@@ -258,16 +298,20 @@ fn remove_user_attribution(
 }
 
 fn add_object_attribution(
-    object_attr: &mut KVec<ObjectAttribution>,
+    object_attr: &mut ObjectAttributes,
     addition: &ObjectAttribution,
 ) -> Result<()> {
-    if let Some(entry) = object_attr.iter_mut().find(|o| o.object == addition.object) {
+    if let Some(entry) = object_attr
+        .attr
+        .iter_mut()
+        .find(|o| o.object == addition.object)
+    {
         entry
             .attr
             .inner
             .extend_from_slice(&addition.attr.inner, GFP_KERNEL)?
     } else {
-        object_attr.push(
+        object_attr.attr.push(
             ObjectAttribution {
                 object: (*addition.object).try_into()?,
                 attr: Attributions {
@@ -282,10 +326,14 @@ fn add_object_attribution(
 }
 
 fn remove_object_attribution(
-    object_attr: &mut [ObjectAttribution],
+    object_attr: &mut ObjectAttributes,
     removal: &ObjectAttribution,
 ) -> Result<()> {
-    if let Some(entry) = object_attr.iter_mut().find(|u| u.object == removal.object) {
+    if let Some(entry) = object_attr
+        .attr
+        .iter_mut()
+        .find(|u| u.object == removal.object)
+    {
         // kernel::Vec has no retain(), so this is a bit less efficient
         // filter to only keep the items not contained in the removal collection
         let mut replacement = kvec![];
@@ -299,39 +347,4 @@ fn remove_object_attribution(
     }
 
     Ok(())
-}
-
-/// Temporary place to store encoded attribute and value identifiers
-pub(crate) mod constants {
-    // User attribute identifiers:
-    // - 0 => "role"
-    // - 1 => "group"
-    pub(crate) const ATTR_ROLE: usize = 0;
-    pub(crate) const ATTR_GROUP: usize = 1;
-
-    // User attribute values:
-    // - 0 => "admin"
-    // - 1 => "user"
-    // - 2 => "software"
-    // - 3 => "sales"
-    pub(crate) const VALUE_ADMIN: i32 = 0;
-    pub(crate) const VALUE_USER: i32 = 1;
-    pub(crate) const VALUE_SOFTWARE: i32 = 2;
-    pub(crate) const VALUE_SALES: i32 = 3;
-
-    // Object attribute identifiers:
-    // - 0 => "protection"
-    // - 1 => "type"
-    pub(crate) const ATTR_PROTECTION: usize = 0;
-    pub(crate) const ATTR_TYPE: usize = 1;
-
-    // Object attribute values:
-    // - 0 => "secret"
-    // - 1 => "open"
-    // - 2 => "pdf"
-    // - 3 => "doc"
-    pub(crate) const VALUE_SECRET: i32 = 0;
-    pub(crate) const VALUE_OPEN: i32 = 1;
-    pub(crate) const VALUE_PDF: i32 = 2;
-    pub(crate) const VALUE_DOC: i32 = 3;
 }
