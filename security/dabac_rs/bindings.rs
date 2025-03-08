@@ -5,6 +5,11 @@
 //! Implements the bare necessities to implement an LSM in Rust and register it,
 //! using the bindings to C. Long term this should move to the kernel crate, but
 //! for now this is easier here.
+//!
+//! Also implemented here are small glue functions that are called from the C
+//! implementation of the dabac_rs securityfs, which was easier to do there than
+//! getting started with all the Rust bindings for it. Long term that should be
+//! replaced with a pure Rust implementation.
 
 use kernel::{
     bindings, c_str,
@@ -12,9 +17,10 @@ use kernel::{
     fs::File,
     prelude::*,
     types::Opaque,
+    uaccess::{UserPtr, UserSlice},
 };
 
-use crate::pdp;
+use crate::{pap, pdp};
 
 /// The name the LSM gets registered under.
 const NAME: &CStr = c_str!("dabac_rs");
@@ -115,4 +121,57 @@ pub extern "C" fn dabac_rs_file_permission(file: *mut bindings::file, mask: c_in
         }
         Err(e) => e.to_errno(),
     }
+}
+
+/// Update the user attributes
+///
+/// Called from the C implementation of the dabac_rs securityfs. Small glue
+/// function that copies the data from userspace before delegating to the actual
+/// function in the PAP.
+#[no_mangle]
+pub extern "C" fn dabac_rs_update_user_attr(ptr: UserPtr, length: c_ulong) -> c_int {
+    update_policy_or_attrs(pap::update_user_attr, ptr, length)
+}
+
+/// Update the object attributes
+///
+/// Called from the C implementation of the dabac_rs securityfs. Small glue
+/// function that copies the data from userspace before delegating to the actual
+/// function in the PAP.
+#[no_mangle]
+pub extern "C" fn dabac_rs_update_object_attr(ptr: UserPtr, length: c_ulong) -> c_int {
+    update_policy_or_attrs(pap::update_object_attr, ptr, length)
+}
+
+/// Update the policy
+///
+/// Called from the C implementation of the dabac_rs securityfs. Small glue
+/// function that copies the data from userspace before delegating to the actual
+/// function in the PAP.
+#[no_mangle]
+pub extern "C" fn dabac_rs_update_policy(ptr: UserPtr, length: c_ulong) -> c_int {
+    update_policy_or_attrs(pap::update_policy, ptr, length)
+}
+
+/// Update stored policy or attributes
+///
+/// Implemented as helper function because they all do the same.
+///
+/// The unsafety of these functions is somewhat hidden by the linker, in C the
+/// function definitions contain a pointer argument, while the same argument is
+/// represented as UserPtr (usize) in Rust. Since there is no unsafe function to
+/// create a UserPtr from an actual pointer, this is probably not the worst, but
+/// still a bit shady.
+fn update_policy_or_attrs(target: fn(&[u8]) -> Result<()>, ptr: UserPtr, length: c_ulong) -> c_int {
+    let mut buf = KVec::new();
+
+    if let Err(e) = UserSlice::new(ptr, length).read_all(&mut buf, GFP_KERNEL) {
+        return e.to_errno();
+    }
+
+    if let Err(e) = target(&buf) {
+        return e.to_errno();
+    }
+
+    length as _
 }
