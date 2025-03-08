@@ -51,8 +51,13 @@ impl FromStr for Expression {
     type Err = Error;
 
     fn from_str(s: &str) -> core::result::Result<Self, Self::Err> {
+        let s = s.trim();
+        if s.is_empty() {
+            return Ok(Self { clauses: kvec![] });
+        }
+
         let mut clauses = kvec![];
-        for clause in s.trim().split('|') {
+        for clause in s.split('|') {
             clauses.push(clause.parse()?, GFP_KERNEL)?;
         }
 
@@ -79,8 +84,13 @@ impl FromStr for Conjunction {
     type Err = Error;
 
     fn from_str(s: &str) -> core::result::Result<Self, Self::Err> {
+        let s = s.trim();
+        if s.is_empty() {
+            return Ok(Self { clauses: kvec![] });
+        }
+
         let mut clauses = kvec![];
-        for clause in s.trim().split('&') {
+        for clause in s.split('&') {
             clauses.push(clause.parse()?, GFP_KERNEL)?;
         }
 
