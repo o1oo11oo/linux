@@ -22,13 +22,26 @@ global_lock! {
 #[derive(Debug)]
 pub(crate) struct UserAttribution {
     pub(crate) user: uid_t,
-    pub(crate) attr: KVec<AVP>,
+    pub(crate) attr: Attributions,
 }
 
 #[derive(Debug)]
 pub(crate) struct ObjectAttribution {
     pub(crate) object: &'static CStr,
-    pub(crate) attr: KVec<AVP>,
+    pub(crate) attr: Attributions,
+}
+
+#[derive(Debug)]
+pub(crate) struct Attributions {
+    pub(crate) inner: KVec<AVP>,
+}
+
+impl Attributions {
+    pub(crate) fn _get(&self, identifier: usize) -> Option<i32> {
+        self.inner
+            .iter()
+            .find_map(|&(i, v)| (i == identifier).then_some(v))
+    }
 }
 
 /// Initialize the PDP during LSM initialization
@@ -47,14 +60,18 @@ pub(crate) fn init() -> Result<()> {
     guard.push(
         UserAttribution {
             user: 0,
-            attr: kvec![(ATTR_ROLE, VALUE_ADMIN), (ATTR_GROUP, VALUE_SOFTWARE)]?,
+            attr: Attributions {
+                inner: kvec![(ATTR_ROLE, VALUE_ADMIN), (ATTR_GROUP, VALUE_SOFTWARE)]?,
+            },
         },
         GFP_KERNEL,
     )?;
     guard.push(
         UserAttribution {
             user: 1000,
-            attr: kvec![(ATTR_ROLE, VALUE_USER), (ATTR_GROUP, VALUE_SALES)]?,
+            attr: Attributions {
+                inner: kvec![(ATTR_ROLE, VALUE_USER), (ATTR_GROUP, VALUE_SALES)]?,
+            },
         },
         GFP_KERNEL,
     )?;
@@ -63,14 +80,18 @@ pub(crate) fn init() -> Result<()> {
     guard.push(
         ObjectAttribution {
             object: c_str!("/home/dabac_rs/a"),
-            attr: kvec![(ATTR_PROTECTION, VALUE_SECRET), (ATTR_TYPE, VALUE_PDF)]?,
+            attr: Attributions {
+                inner: kvec![(ATTR_PROTECTION, VALUE_SECRET), (ATTR_TYPE, VALUE_PDF)]?,
+            },
         },
         GFP_KERNEL,
     )?;
     guard.push(
         ObjectAttribution {
             object: c_str!("/home/dabac_rs/b"),
-            attr: kvec![(ATTR_PROTECTION, VALUE_OPEN), (ATTR_TYPE, VALUE_DOC)]?,
+            attr: Attributions {
+                inner: kvec![(ATTR_PROTECTION, VALUE_OPEN), (ATTR_TYPE, VALUE_DOC)]?,
+            },
         },
         GFP_KERNEL,
     )?;
@@ -85,7 +106,7 @@ pub(crate) fn get_user_attributes(uid: uid_t) -> Result<KVec<AVP>> {
         USER_ATTRIBUTES
             .lock()
             .iter()
-            .find_map(|u| (u.user == uid).then(|| u.attr.as_ref()))
+            .find_map(|u| (u.user == uid).then_some(u.attr.inner.as_ref()))
             .unwrap_or_default(),
         GFP_KERNEL,
     )?;
@@ -99,7 +120,7 @@ pub(crate) fn get_object_attributes(path: &CStr) -> Result<KVec<AVP>> {
         OBJECT_ATTRIBUTES
             .lock()
             .iter()
-            .find_map(|o| (o.object == path).then(|| o.attr.as_ref()))
+            .find_map(|o| (o.object == path).then_some(o.attr.inner.as_ref()))
             .unwrap_or_default(),
         GFP_KERNEL,
     )?;
@@ -139,12 +160,17 @@ fn add_user_attribution(
     addition: &UserAttribution,
 ) -> Result<()> {
     if let Some(entry) = user_attr.iter_mut().find(|u| u.user == addition.user) {
-        entry.attr.extend_from_slice(&addition.attr, GFP_KERNEL)?
+        entry
+            .attr
+            .inner
+            .extend_from_slice(&addition.attr.inner, GFP_KERNEL)?
     } else {
         user_attr.push(
             UserAttribution {
                 user: addition.user,
-                attr: vec_clone(&addition.attr, GFP_KERNEL)?,
+                attr: Attributions {
+                    inner: vec_clone(&addition.attr.inner, GFP_KERNEL)?,
+                },
             },
             GFP_KERNEL,
         )?
@@ -161,12 +187,12 @@ fn remove_user_attribution(
         // kernel::Vec has no retain(), so this is a bit less efficient
         // filter to only keep the items not contained in the removal collection
         let mut replacement = kvec![];
-        core::mem::swap(&mut entry.attr, &mut replacement);
+        core::mem::swap(&mut entry.attr.inner, &mut replacement);
         for item in replacement
             .into_iter()
-            .filter(|a| !removal.attr.contains(a))
+            .filter(|a| !removal.attr.inner.contains(a))
         {
-            entry.attr.push(item, GFP_KERNEL)?;
+            entry.attr.inner.push(item, GFP_KERNEL)?;
         }
     }
 
@@ -178,12 +204,17 @@ fn add_object_attribution(
     addition: &ObjectAttribution,
 ) -> Result<()> {
     if let Some(entry) = object_attr.iter_mut().find(|o| o.object == addition.object) {
-        entry.attr.extend_from_slice(&addition.attr, GFP_KERNEL)?
+        entry
+            .attr
+            .inner
+            .extend_from_slice(&addition.attr.inner, GFP_KERNEL)?
     } else {
         object_attr.push(
             ObjectAttribution {
                 object: addition.object,
-                attr: vec_clone(&addition.attr, GFP_KERNEL)?,
+                attr: Attributions {
+                    inner: vec_clone(&addition.attr.inner, GFP_KERNEL)?,
+                },
             },
             GFP_KERNEL,
         )?
@@ -200,12 +231,12 @@ fn remove_object_attribution(
         // kernel::Vec has no retain(), so this is a bit less efficient
         // filter to only keep the items not contained in the removal collection
         let mut replacement = kvec![];
-        core::mem::swap(&mut entry.attr, &mut replacement);
+        core::mem::swap(&mut entry.attr.inner, &mut replacement);
         for item in replacement
             .into_iter()
-            .filter(|a| !removal.attr.contains(a))
+            .filter(|a| !removal.attr.inner.contains(a))
         {
-            entry.attr.push(item, GFP_KERNEL)?;
+            entry.attr.inner.push(item, GFP_KERNEL)?;
         }
     }
 

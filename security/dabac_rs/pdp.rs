@@ -9,7 +9,7 @@ use kernel::{c_str, fs::File, kvec, pr_info, prelude::*, sync::global_lock, task
 use crate::{
     epp::{self, PolicyChange},
     helpers,
-    pip::{self, constants::*, ObjectAttribution, UserAttribution},
+    pip::{self, constants::*, Attributions, ObjectAttribution, UserAttribution},
     AVP,
 };
 
@@ -33,8 +33,8 @@ struct Rule {
 
 #[derive(Debug)]
 struct PreCondition {
-    user_attr: KVec<AVP>,
-    object_attr: KVec<AVP>,
+    user_attr: Attributions,
+    object_attr: Attributions,
 }
 
 #[derive(Debug)]
@@ -56,18 +56,26 @@ pub(crate) fn init() -> Result<()> {
     guard.rules.push(
         Rule {
             pre: PreCondition {
-                user_attr: kvec![(ATTR_ROLE, VALUE_ADMIN)]?,
-                object_attr: kvec![(ATTR_PROTECTION, VALUE_SECRET)]?,
+                user_attr: Attributions {
+                    inner: kvec![(ATTR_ROLE, VALUE_ADMIN)]?,
+                },
+                object_attr: Attributions {
+                    inner: kvec![(ATTR_PROTECTION, VALUE_SECRET)]?,
+                },
             },
             post: PostCondition {
                 changes: kvec![
                     PolicyChange::RemoveObjectAttribution(ObjectAttribution {
                         object: c_str!("/home/dabac_rs/a"),
-                        attr: kvec![(ATTR_PROTECTION, VALUE_SECRET)]?,
+                        attr: Attributions {
+                            inner: kvec![(ATTR_PROTECTION, VALUE_SECRET)]?
+                        },
                     }),
                     PolicyChange::AddObjectAttribution(ObjectAttribution {
                         object: c_str!("/home/dabac_rs/a"),
-                        attr: kvec![(ATTR_PROTECTION, VALUE_OPEN)]?,
+                        attr: Attributions {
+                            inner: kvec![(ATTR_PROTECTION, VALUE_OPEN)]?
+                        },
                     }),
                 ]?,
             },
@@ -77,18 +85,26 @@ pub(crate) fn init() -> Result<()> {
     guard.rules.push(
         Rule {
             pre: PreCondition {
-                user_attr: kvec![(ATTR_ROLE, VALUE_ADMIN)]?,
-                object_attr: kvec![(ATTR_PROTECTION, VALUE_OPEN)]?,
+                user_attr: Attributions {
+                    inner: kvec![(ATTR_ROLE, VALUE_ADMIN)]?,
+                },
+                object_attr: Attributions {
+                    inner: kvec![(ATTR_PROTECTION, VALUE_OPEN)]?,
+                },
             },
             post: PostCondition {
                 changes: kvec![
                     PolicyChange::AddUserAttribution(UserAttribution {
                         user: 1000,
-                        attr: kvec![(ATTR_ROLE, VALUE_ADMIN)]?,
+                        attr: Attributions {
+                            inner: kvec![(ATTR_ROLE, VALUE_ADMIN)]?
+                        },
                     }),
                     PolicyChange::RemoveUserAttribution(UserAttribution {
                         user: 1000,
-                        attr: kvec![(ATTR_ROLE, VALUE_ADMIN)]?,
+                        attr: Attributions {
+                            inner: kvec![(ATTR_ROLE, VALUE_ADMIN)]?
+                        },
                     }),
                 ]?,
             },
@@ -98,8 +114,12 @@ pub(crate) fn init() -> Result<()> {
     guard.rules.push(
         Rule {
             pre: PreCondition {
-                user_attr: kvec![(ATTR_ROLE, VALUE_USER)]?,
-                object_attr: kvec![(ATTR_PROTECTION, VALUE_OPEN)]?,
+                user_attr: Attributions {
+                    inner: kvec![(ATTR_ROLE, VALUE_USER)]?,
+                },
+                object_attr: Attributions {
+                    inner: kvec![(ATTR_PROTECTION, VALUE_OPEN)]?,
+                },
             },
             post: PostCondition { changes: kvec![] },
         },
@@ -149,8 +169,8 @@ pub(crate) fn file_permission(file: &File, _mask: i32) -> Result<bool> {
 /// If a rule matches, its post-condition is executed by the EPP, if one exists.
 fn resolve(u_attr: &[AVP], o_attr: &[AVP]) -> Result<bool> {
     if let Some(rule) = POLICY.lock().rules.iter().find(|&r| {
-        r.pre.user_attr.iter().all(|u| u_attr.contains(u))
-            && r.pre.object_attr.iter().all(|o| o_attr.contains(o))
+        r.pre.user_attr.inner.iter().all(|u| u_attr.contains(u))
+            && r.pre.object_attr.inner.iter().all(|o| o_attr.contains(o))
     }) {
         if !rule.post.changes.is_empty() {
             epp::execute_postcondition(&rule.post)?;
