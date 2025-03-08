@@ -8,9 +8,9 @@ use kernel::{c_str, fs::File, kvec, pr_info, prelude::*, sync::global_lock, task
 
 use crate::{
     epp::{self, PolicyChange},
+    expr::Expression,
     helpers,
     pip::{self, constants::*, Attributions, ObjectAttribution, UserAttribution},
-    AVP,
 };
 
 const PROTECTED_PATH: &CStr = c_str!("/home/dabac_rs/");
@@ -33,8 +33,7 @@ struct Rule {
 
 #[derive(Debug)]
 struct PreCondition {
-    user_attr: Attributions,
-    object_attr: Attributions,
+    formula: Expression,
 }
 
 #[derive(Debug)]
@@ -56,12 +55,7 @@ pub(crate) fn init() -> Result<()> {
     guard.rules.push(
         Rule {
             pre: PreCondition {
-                user_attr: Attributions {
-                    inner: kvec![(ATTR_ROLE, VALUE_ADMIN)]?,
-                },
-                object_attr: Attributions {
-                    inner: kvec![(ATTR_PROTECTION, VALUE_SECRET)]?,
-                },
+                formula: "u0=c0 & o0=c0".parse()?,
             },
             post: PostCondition {
                 changes: kvec![
@@ -85,12 +79,7 @@ pub(crate) fn init() -> Result<()> {
     guard.rules.push(
         Rule {
             pre: PreCondition {
-                user_attr: Attributions {
-                    inner: kvec![(ATTR_ROLE, VALUE_ADMIN)]?,
-                },
-                object_attr: Attributions {
-                    inner: kvec![(ATTR_PROTECTION, VALUE_OPEN)]?,
-                },
+                formula: "u0=c0 & o0=c1".parse()?,
             },
             post: PostCondition {
                 changes: kvec![
@@ -114,12 +103,7 @@ pub(crate) fn init() -> Result<()> {
     guard.rules.push(
         Rule {
             pre: PreCondition {
-                user_attr: Attributions {
-                    inner: kvec![(ATTR_ROLE, VALUE_USER)]?,
-                },
-                object_attr: Attributions {
-                    inner: kvec![(ATTR_PROTECTION, VALUE_OPEN)]?,
-                },
+                formula: "u0=c1 & o0=c1".parse()?,
             },
             post: PostCondition { changes: kvec![] },
         },
@@ -143,12 +127,12 @@ pub(crate) fn file_permission(file: &File, _mask: i32) -> Result<bool> {
     }
 
     let uid = Kuid::current_euid().into_uid_in_current_ns();
-    let u_attr = pip::get_user_attributes(uid)?;
-    let o_attr = pip::get_object_attributes(&full_name)?;
-    pr_info!("User {uid} (attr: {u_attr:?}) ist trying to access {full_name:?} (attr: {o_attr:?})");
+    let user_attr = pip::get_user_attributes(uid)?;
+    let object_attr = pip::get_object_attributes(&full_name)?;
+    pr_info!("User {uid} (attr: {user_attr:?}) ist trying to access {full_name:?} (attr: {object_attr:?})");
 
     // Check policy for protected files
-    let resolution = resolve(&u_attr, &o_attr)?;
+    let resolution = resolve(&user_attr, &object_attr)?;
 
     if resolution {
         pr_info!("Access granted");
@@ -167,16 +151,15 @@ pub(crate) fn file_permission(file: &File, _mask: i32) -> Result<bool> {
 /// The values of the attributes need to be equal.
 ///
 /// If a rule matches, its post-condition is executed by the EPP, if one exists.
-fn resolve(u_attr: &[AVP], o_attr: &[AVP]) -> Result<bool> {
-    if let Some(rule) = POLICY.lock().rules.iter().find(|&r| {
-        r.pre.user_attr.inner.iter().all(|u| u_attr.contains(u))
-            && r.pre.object_attr.inner.iter().all(|o| o_attr.contains(o))
-    }) {
-        if !rule.post.changes.is_empty() {
-            epp::execute_postcondition(&rule.post)?;
-        }
+fn resolve(user_attr: &Attributions, object_attr: &Attributions) -> Result<bool> {
+    for rule in &POLICY.lock().rules {
+        if rule.pre.formula.evaluate(user_attr, object_attr)? {
+            if !rule.post.changes.is_empty() {
+                epp::execute_postcondition(&rule.post)?;
+            }
 
-        return Ok(true);
+            return Ok(true);
+        }
     }
 
     return Ok(false);

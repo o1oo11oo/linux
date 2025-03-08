@@ -7,7 +7,7 @@
 use constants::*;
 use kernel::{bindings::uid_t, c_str, global_lock, kvec, prelude::*, str::CStr};
 
-use crate::{epp::PolicyChange, helpers::vec_clone, AVP};
+use crate::{epp::PolicyChange, helpers::vec_clone};
 
 global_lock! {
     // SAFETY: Initialized in LSM initializer before first use.
@@ -18,6 +18,12 @@ global_lock! {
     // SAFETY: Initialized in LSM initializer before first use.
     unsafe(uninit) static OBJECT_ATTRIBUTES: Mutex<KVec<ObjectAttribution>> = KVec::new();
 }
+
+/// An Attribute-Value Pair (AVP) combines an attribute "name" and its value.
+///
+/// For simplicity the name is encoded as an identifier and values only allow
+/// integers, which are easier to work with in equations.
+type AVP = (usize, i32);
 
 #[derive(Debug)]
 pub(crate) struct UserAttribution {
@@ -37,7 +43,7 @@ pub(crate) struct Attributions {
 }
 
 impl Attributions {
-    pub(crate) fn _get(&self, identifier: usize) -> Option<i32> {
+    pub(crate) fn get(&self, identifier: usize) -> Option<i32> {
         self.inner
             .iter()
             .find_map(|&(i, v)| (i == identifier).then_some(v))
@@ -99,32 +105,30 @@ pub(crate) fn init() -> Result<()> {
     Ok(())
 }
 
-/// Retrieve the AVPs for a specific user
-pub(crate) fn get_user_attributes(uid: uid_t) -> Result<KVec<AVP>> {
-    let mut buf = kvec![];
-    buf.extend_from_slice(
-        USER_ATTRIBUTES
-            .lock()
-            .iter()
-            .find_map(|u| (u.user == uid).then_some(u.attr.inner.as_ref()))
-            .unwrap_or_default(),
-        GFP_KERNEL,
-    )?;
-    Ok(buf)
+/// Retrieve the Attributions for a specific user
+pub(crate) fn get_user_attributes(uid: uid_t) -> Result<Attributions> {
+    let guard = USER_ATTRIBUTES.lock();
+    let avps = guard
+        .iter()
+        .find_map(|u| (u.user == uid).then_some(u.attr.inner.as_ref()))
+        .unwrap_or_default();
+
+    Ok(Attributions {
+        inner: vec_clone(avps, GFP_KERNEL)?,
+    })
 }
 
-/// Retrieve the AVPs for a specific object
-pub(crate) fn get_object_attributes(path: &CStr) -> Result<KVec<AVP>> {
-    let mut buf = kvec![];
-    buf.extend_from_slice(
-        OBJECT_ATTRIBUTES
-            .lock()
-            .iter()
-            .find_map(|o| (o.object == path).then_some(o.attr.inner.as_ref()))
-            .unwrap_or_default(),
-        GFP_KERNEL,
-    )?;
-    Ok(buf)
+/// Retrieve the Attributions for a specific object
+pub(crate) fn get_object_attributes(path: &CStr) -> Result<Attributions> {
+    let guard = OBJECT_ATTRIBUTES.lock();
+    let avps = guard
+        .iter()
+        .find_map(|o| (o.object == path).then_some(o.attr.inner.as_ref()))
+        .unwrap_or_default();
+
+    Ok(Attributions {
+        inner: vec_clone(avps, GFP_KERNEL)?,
+    })
 }
 
 /// Add new AVPs from post-conditions, called by EPP.

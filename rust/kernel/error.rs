@@ -11,6 +11,7 @@ use crate::{
 
 use core::fmt;
 use core::num::NonZeroI32;
+use core::num::ParseIntError;
 use core::num::TryFromIntError;
 use core::str::Utf8Error;
 
@@ -202,6 +203,12 @@ impl From<AllocError> for Error {
 
 impl From<TryFromIntError> for Error {
     fn from(_: TryFromIntError) -> Error {
+        code::EINVAL
+    }
+}
+
+impl From<ParseIntError> for Error {
+    fn from(_: ParseIntError) -> Error {
         code::EINVAL
     }
 }

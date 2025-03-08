@@ -30,7 +30,7 @@ pub(crate) fn file_get_full_name(file: &File) -> Result<CString> {
     Ok(unsafe { CStr::from_char_ptr(full_name as _) }.try_into()?)
 }
 
-pub(crate) fn vec_clone<T: Clone>(src: &KVec<T>, flags: Flags) -> Result<KVec<T>> {
+pub(crate) fn vec_clone<T: Clone>(src: &[T], flags: Flags) -> Result<KVec<T>> {
     let mut cp = kvec![];
     cp.extend_from_slice(src, flags)?;
     Ok(cp)
