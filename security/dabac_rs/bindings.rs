@@ -129,7 +129,12 @@ pub extern "C" fn dabac_rs_file_permission(file: *mut bindings::file, mask: c_in
 /// function that copies the data from userspace before delegating to the actual
 /// function in the PAP.
 #[no_mangle]
-pub extern "C" fn dabac_rs_update_user_attr(ptr: UserPtr, length: c_ulong) -> c_int {
+pub extern "C" fn dabac_rs_update_user_attr(
+    _file: *mut bindings::file,
+    ptr: UserPtr,
+    length: c_ulong,
+    _offset: c_longlong,
+) -> c_int {
     update_policy_or_attrs(pap::update_user_attr, ptr, length)
 }
 
@@ -139,7 +144,12 @@ pub extern "C" fn dabac_rs_update_user_attr(ptr: UserPtr, length: c_ulong) -> c_
 /// function that copies the data from userspace before delegating to the actual
 /// function in the PAP.
 #[no_mangle]
-pub extern "C" fn dabac_rs_update_object_attr(ptr: UserPtr, length: c_ulong) -> c_int {
+pub extern "C" fn dabac_rs_update_object_attr(
+    _file: *mut bindings::file,
+    ptr: UserPtr,
+    length: c_ulong,
+    _offset: c_longlong,
+) -> c_int {
     update_policy_or_attrs(pap::update_object_attr, ptr, length)
 }
 
@@ -149,7 +159,12 @@ pub extern "C" fn dabac_rs_update_object_attr(ptr: UserPtr, length: c_ulong) -> 
 /// function that copies the data from userspace before delegating to the actual
 /// function in the PAP.
 #[no_mangle]
-pub extern "C" fn dabac_rs_update_policy(ptr: UserPtr, length: c_ulong) -> c_int {
+pub extern "C" fn dabac_rs_update_policy(
+    _file: *mut bindings::file,
+    ptr: UserPtr,
+    length: c_ulong,
+    _offset: c_longlong,
+) -> c_int {
     update_policy_or_attrs(pap::update_policy, ptr, length)
 }
 
