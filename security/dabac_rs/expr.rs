@@ -2,31 +2,35 @@
 
 //! Logical formula expression tree and evaluation.
 //!
-//! To be used in Policy rules to determine access decisions.
+//! To be used in [`Policy`] rules to determine access decisions.
 //!
 //! This is a simplified expression tree, which only accepts formulas in
 //! disjunctive normal form (DNF).
 //!
-//! Formulas can be parsed from str, errors during parsing result in EINVAL. The
-//! grammar is kept simple to simplifiy parsing.  Whitespace is ignored.
+//! Formulas can be parsed from [`str`] using [`str::parse`], errors during
+//! parsing result in [EINVAL]. The grammar is kept simple to simplifiy parsing.
+//! Whitespace is ignored. Expression are discribed by the following EBNF:
 //!
-//! EBNF:
-//! Expression = Expression "|" Expression | Conjunction
-//! Conjunction = Conjunction "&" Conjunction | Literal
+//! ```EBNF
+//! Expression = Expression "|" Expression | Conjunction | ε
+//! Conjunction = Conjunction "&" Conjunction | Literal | ε
 //! Literal = Term | "!" Term
 //! Term = Value "<" Value | Value "=" Value | Value ">" Value
 //! Value = "u" usize | "o" usize | "c" i32
+//! ```
 //!
-//! Note that values can either be constants (starting with "c") or user/object
-//! attributes (starting with "u"/"o" respectively). The attributes are
-//! evaluated by looking up their values from assignments in the parameters
-//! passed to the evaluate function.
+//! Note that values can either be constants (starting with `"c"`) or
+//! user/object attributes (starting with `"u"`/`"o"` respectively). The
+//! attributes are evaluated by looking up their values from assignments in the
+//! parameters/attributions passed to the evaluate function.
+//!
+//! [`Policy`]: crate::policy::Policy
 
 use core::str::FromStr;
 
 use kernel::{kvec, prelude::*};
 
-use crate::pip::Attributions;
+use crate::policy::Attributions;
 
 #[derive(Debug)]
 pub(crate) struct Expression {

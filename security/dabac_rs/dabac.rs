@@ -11,6 +11,7 @@ mod helpers;
 mod pap;
 mod pdp;
 mod pip;
+mod policy;
 
 // Export functions which are called by C, even though that's probably unnecessary
 pub use bindings::{

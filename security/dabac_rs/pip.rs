@@ -4,16 +4,15 @@
 //!
 //! Policy Information Point for Rust-based DABAC LSM.
 
-use core::str::FromStr;
+use kernel::{bindings, global_lock, kvec, prelude::*, str::CStr};
 
-use kernel::{
-    bindings::uid_t,
-    global_lock, kvec,
-    prelude::*,
-    str::{CStr, CString},
+use crate::{
+    helpers::vec_clone,
+    policy::{
+        Attributions, ObjectAttributes, ObjectAttribution, PolicyChange, UserAttributes,
+        UserAttribution,
+    },
 };
-
-use crate::{epp::PolicyChange, helpers::vec_clone};
 
 global_lock! {
     // SAFETY: Initialized in LSM initializer before first use.
@@ -23,130 +22,6 @@ global_lock! {
 global_lock! {
     // SAFETY: Initialized in LSM initializer before first use.
     unsafe(uninit) static OBJECT_ATTRIBUTES: Mutex<ObjectAttributes> = ObjectAttributes { attr: KVec::new() };
-}
-
-/// An Attribute-Value Pair (AVP) combines an attribute "name" and its value.
-///
-/// For simplicity the name is encoded as an identifier and values only allow
-/// integers, which are easier to work with in equations.
-type AVP = (usize, i32);
-
-#[derive(Debug)]
-pub(crate) struct UserAttributes {
-    pub(crate) attr: KVec<UserAttribution>,
-}
-
-impl FromStr for UserAttributes {
-    type Err = Error;
-
-    fn from_str(s: &str) -> core::result::Result<Self, Self::Err> {
-        let s = s.trim();
-        if s.is_empty() {
-            return Ok(Self { attr: kvec![] });
-        }
-
-        let mut attrs = kvec![];
-        for attr in s.split(',') {
-            attrs.push(attr.parse()?, GFP_KERNEL)?;
-        }
-
-        Ok(Self { attr: attrs })
-    }
-}
-
-#[derive(Debug)]
-pub(crate) struct UserAttribution {
-    pub(crate) user: uid_t,
-    pub(crate) attr: Attributions,
-}
-
-impl FromStr for UserAttribution {
-    type Err = Error;
-
-    fn from_str(s: &str) -> core::result::Result<Self, Self::Err> {
-        match s.trim().split_once(':') {
-            None => Err(EINVAL),
-            Some((uid, attr)) => Ok(Self {
-                user: uid.parse()?,
-                attr: attr.parse()?,
-            }),
-        }
-    }
-}
-
-#[derive(Debug)]
-pub(crate) struct ObjectAttributes {
-    pub(crate) attr: KVec<ObjectAttribution>,
-}
-
-impl FromStr for ObjectAttributes {
-    type Err = Error;
-
-    fn from_str(s: &str) -> core::result::Result<Self, Self::Err> {
-        let s = s.trim();
-        if s.is_empty() {
-            return Ok(Self { attr: kvec![] });
-        }
-
-        let mut attrs = kvec![];
-        for attr in s.split(',') {
-            attrs.push(attr.parse()?, GFP_KERNEL)?;
-        }
-
-        Ok(Self { attr: attrs })
-    }
-}
-
-#[derive(Debug)]
-pub(crate) struct ObjectAttribution {
-    pub(crate) object: CString,
-    pub(crate) attr: Attributions,
-}
-
-impl FromStr for ObjectAttribution {
-    type Err = Error;
-
-    fn from_str(s: &str) -> core::result::Result<Self, Self::Err> {
-        match s.trim().split_once(':') {
-            None => Err(EINVAL),
-            Some((object, attr)) => Ok(Self {
-                object: object.try_into()?,
-                attr: attr.parse()?,
-            }),
-        }
-    }
-}
-
-#[derive(Debug)]
-pub(crate) struct Attributions {
-    pub(crate) inner: KVec<AVP>,
-}
-
-impl Attributions {
-    pub(crate) fn get(&self, identifier: usize) -> Option<i32> {
-        self.inner
-            .iter()
-            .find_map(|&(i, v)| (i == identifier).then_some(v))
-    }
-}
-
-impl FromStr for Attributions {
-    type Err = Error;
-
-    fn from_str(s: &str) -> core::result::Result<Self, Self::Err> {
-        let s = s.trim();
-        if s.is_empty() {
-            return Ok(Self { inner: kvec![] });
-        }
-
-        let mut attrs = kvec![];
-        for attr in s.split('&') {
-            let (i, v) = attr.trim().split_once('=').ok_or(EINVAL)?;
-            attrs.push((i.trim().parse()?, v.trim().parse()?), GFP_KERNEL)?;
-        }
-
-        Ok(Self { inner: attrs })
-    }
 }
 
 /// Initialize the PDP during LSM initialization
@@ -201,7 +76,7 @@ pub(crate) fn set_object_attributes(attrs: ObjectAttributes) {
 }
 
 /// Retrieve the Attributions for a specific user
-pub(crate) fn get_user_attributes(uid: uid_t) -> Result<Attributions> {
+pub(crate) fn get_user_attributes(uid: bindings::uid_t) -> Result<Attributions> {
     let guard = USER_ATTRIBUTES.lock();
     let avps = guard
         .attr

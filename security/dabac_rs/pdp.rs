@@ -4,15 +4,11 @@
 //!
 //! Policy Decision Point for Rust-based DABAC LSM.
 
-use core::str::FromStr;
-
-use kernel::{c_str, fs::File, kvec, pr_info, prelude::*, sync::global_lock, task::Kuid};
+use kernel::{c_str, fs::File, pr_info, prelude::*, sync::global_lock, task::Kuid};
 
 use crate::{
-    epp::{self, PolicyChange},
-    expr::Expression,
-    helpers,
-    pip::{self, Attributions},
+    epp, helpers, pip,
+    policy::{Attributions, Policy},
 };
 
 const PROTECTED_PATH: &CStr = c_str!("/home/dabac_rs/");
@@ -20,88 +16,6 @@ const PROTECTED_PATH: &CStr = c_str!("/home/dabac_rs/");
 global_lock! {
     // SAFETY: Initialized in module initializer before first use.
     unsafe(uninit) static POLICY: Mutex<Policy> = Policy {rules: KVec::new()};
-}
-
-#[derive(Debug)]
-pub(crate) struct Policy {
-    rules: KVec<Rule>,
-}
-
-impl FromStr for Policy {
-    type Err = Error;
-
-    fn from_str(s: &str) -> core::result::Result<Self, Self::Err> {
-        let s = s.trim();
-        if s.is_empty() {
-            return Ok(Self { rules: kvec![] });
-        }
-
-        let mut rules = kvec![];
-        for rule in s.split(';') {
-            rules.push(rule.parse()?, GFP_KERNEL)?;
-        }
-        Ok(Self { rules })
-    }
-}
-
-#[derive(Debug)]
-struct Rule {
-    pre: PreCondition,
-    post: PostCondition,
-}
-
-impl FromStr for Rule {
-    type Err = Error;
-
-    fn from_str(s: &str) -> core::result::Result<Self, Self::Err> {
-        match s.trim().split_once("=>") {
-            None => Ok(Self {
-                pre: s.parse()?,
-                post: PostCondition { changes: kvec![] },
-            }),
-            Some((pre, post)) => Ok(Self {
-                pre: pre.parse()?,
-                post: post.parse()?,
-            }),
-        }
-    }
-}
-
-#[derive(Debug)]
-struct PreCondition {
-    formula: Expression,
-}
-
-impl FromStr for PreCondition {
-    type Err = Error;
-
-    fn from_str(s: &str) -> core::result::Result<Self, Self::Err> {
-        Ok(Self {
-            formula: s.trim().parse()?,
-        })
-    }
-}
-
-#[derive(Debug)]
-pub(crate) struct PostCondition {
-    pub(crate) changes: KVec<PolicyChange>,
-}
-
-impl FromStr for PostCondition {
-    type Err = Error;
-
-    fn from_str(s: &str) -> core::result::Result<Self, Self::Err> {
-        let s = s.trim();
-        if s.is_empty() {
-            return Ok(Self { changes: kvec![] });
-        }
-
-        let mut changes = kvec![];
-        for change in s.split(',') {
-            changes.push(change.parse()?, GFP_KERNEL)?;
-        }
-        Ok(Self { changes })
-    }
 }
 
 /// Initialize the PDP during LSM initialization
@@ -116,7 +30,7 @@ pub(crate) fn init() -> Result<()> {
 
     let policy = "u0=c0 & o0=c0 => -o /home/dabac_rs/a: 0=0, +o /home/dabac_rs/a: 0=1;
         u0=c0 & o0=c1 => +u 1000: 0=0, -u 1000: 0=0;
-        u0=c1 & o0=c1 =>"
+        u0=c1 & o0=c1"
         .parse()?;
     set_policy(policy);
 
