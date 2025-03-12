@@ -30,7 +30,7 @@ pub(crate) fn update_policy(policy: &[u8]) -> Result<()> {
     // TODO: check for policy replacement permissions
     let policy = str::from_utf8(policy)?.parse()?;
     pr_info!("Updating policy to: {policy:?}");
-    pdp::set_policy(policy);
+    pdp::set_policy(policy)?;
 
     Ok(())
 }
