@@ -18,7 +18,10 @@ pub mod rcu;
 
 pub use arc::{Arc, ArcBorrow, UniqueArc};
 pub use condvar::{new_condvar, CondVar, CondVarTimeoutResult};
-pub use lock::global::{global_lock, GlobalGuard, GlobalLock, GlobalLockBackend, GlobalLockedBy, ProjectableGlobalLockedBy};
+pub use lock::global::{
+    global_lock, GlobalGuard, GlobalLock, GlobalLockBackend, GlobalLockedBy,
+    ProjectableGlobalLockedBy,
+};
 pub use lock::mutex::{new_mutex, Mutex, MutexGuard};
 pub use lock::spinlock::{new_spinlock, SpinLock, SpinLockGuard};
 pub use locked_by::LockedBy;
@@ -69,4 +72,4 @@ macro_rules! optional_name {
 ///
 /// The implement type must allow multiple immutable references and one pinned mutable references
 /// co-exist as the same time.
-pub unsafe trait Projectable { }
+pub unsafe trait Projectable {}

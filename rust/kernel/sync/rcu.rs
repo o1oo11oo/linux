@@ -61,7 +61,7 @@ pub struct Rcu<P: ForeignOwnable>(Atomic<*mut crate::ffi::c_void>, PhantomData<P
 
 // SAFETY: `Rcu` is safe to have multiple immutable references co-existing with one pinned mutable
 // reference.
-unsafe impl<P: ForeignOwnable> crate::sync::Projectable for Rcu<P> { }
+unsafe impl<P: ForeignOwnable> crate::sync::Projectable for Rcu<P> {}
 
 /// A pointer that has been unpublished, but hasn't waited for a grace period yet.
 ///

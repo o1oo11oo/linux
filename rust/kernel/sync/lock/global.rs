@@ -217,7 +217,9 @@ impl<T: Projectable, B: GlobalLockBackend> ProjectableGlobalLockedBy<T, B> {
 
 use core::pin::Pin;
 
-impl<T: ?Sized + Projectable, B: GlobalLockBackend> core::ops::Deref for ProjectableGlobalLockedBy<T, B> {
+impl<T: ?Sized + Projectable, B: GlobalLockBackend> core::ops::Deref
+    for ProjectableGlobalLockedBy<T, B>
+{
     type Target = T;
     /// Access the value immutably.
     ///
