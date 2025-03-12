@@ -16,7 +16,7 @@
 //! Conjunction = Conjunction "&" Conjunction | Literal | ε
 //! Literal = Term | "!" Term
 //! Term = Value "<" Value | Value "=" Value | Value ">" Value
-//! Value = "u" usize | "o" usize | "c" i32
+//! Value = "u" usize | "o" usize | "c" NonZeroU32
 //! ```
 //!
 //! Note that values can either be constants (starting with `"c"`) or
@@ -26,7 +26,7 @@
 //!
 //! [`Policy`]: crate::policy::Policy
 
-use core::str::FromStr;
+use core::{num::NonZeroU32, str::FromStr};
 
 use kernel::{kvec, prelude::*};
 
@@ -176,11 +176,11 @@ impl FromStr for Term {
 enum Value {
     UserAttr(usize),
     ObjectAttr(usize),
-    Constant(i32),
+    Constant(NonZeroU32),
 }
 
 impl Value {
-    fn evaluate(&self, user_attr: &Attributions, object_attr: &Attributions) -> Result<i32> {
+    fn evaluate(&self, user_attr: &Attributions, object_attr: &Attributions) -> Result<NonZeroU32> {
         match self {
             Value::UserAttr(identifier) => user_attr.get(*identifier).ok_or(EINVAL),
             Value::ObjectAttr(identifier) => object_attr.get(*identifier).ok_or(EINVAL),

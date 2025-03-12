@@ -41,25 +41,25 @@ pub(crate) fn init() -> Result<()> {
     // - 1 => "group"
 
     // User attribute values:
-    // - 0 => "admin"
-    // - 1 => "user"
-    // - 2 => "software"
-    // - 3 => "sales"
+    // - 1 => "admin"
+    // - 2 => "user"
+    // - 3 => "software"
+    // - 4 => "sales"
 
     // Object attribute identifiers:
     // - 0 => "protection"
     // - 1 => "type"
 
     // Object attribute values:
-    // - 0 => "secret"
-    // - 1 => "open"
-    // - 2 => "pdf"
-    // - 3 => "doc"
+    // - 1 => "secret"
+    // - 2 => "open"
+    // - 3 => "pdf"
+    // - 4 => "doc"
 
-    let attrs = "0: 0=0 & 1=2, 1000: 0=1 & 1=3".parse()?;
+    let attrs = "0: 0=1 & 1=3, 1000: 0=2 & 1=4".parse()?;
     set_user_attributes(attrs);
 
-    let attrs = "/home/dabac_rs/a: 0=0 & 1=2, /home/dabac_rs/b: 0=1 & 1=3".parse()?;
+    let attrs = "/home/dabac_rs/a: 0=1 & 1=3, /home/dabac_rs/b: 0=2 & 1=4".parse()?;
     set_object_attributes(attrs);
 
     Ok(())

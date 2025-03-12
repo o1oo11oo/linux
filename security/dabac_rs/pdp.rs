@@ -44,9 +44,9 @@ pub(crate) fn init() -> Result<()> {
     // formula evaluation in a simpler way. Attribute identifiers as usize also
     // allow (ab-)using Vecs as HashMaps. See PIP for an int => string mapping.
 
-    let policy = "u0=c0 & o0=c0 => -o /home/dabac_rs/a: 0=0, +o /home/dabac_rs/a: 0=1;
-        u0=c0 & o0=c1 => +u 1000: 0=0, -u 1000: 0=0;
-        u0=c1 & o0=c1"
+    let policy = "u0=c1 & o0=c1 => -o /home/dabac_rs/a: 0=1, +o /home/dabac_rs/a: 0=2;
+        u0=c1 & o0=c2 => +u 1000: 0=1, -u 1000: 0=1;
+        u0=c2 & o0=c2"
         .parse()?;
     set_policy(policy)?;
 

@@ -24,7 +24,7 @@
 //! UserAttribution = usize ":" Attributions
 //! ObjectAttribution = str ":" Attributions
 //! Attributions = AVP "&" AVP | AVP | ε
-//! AVP = usize "=" i32
+//! AVP = usize "=" NonZeroU32
 //!
 //! UserAttributes = UserAttributes "," UserAttributes | UserAttribution | ε
 //! ObjectAttributes = ObjectAttributes "," ObjectAttributes | ObjectAttribution | ε
@@ -32,9 +32,9 @@
 //!
 //! Here's what an example policy looks like:
 //! ```text
-//! u0=c0 & o0=c0 => -o /home/dabac_rs/a: 0=0, +o /home/dabac_rs/a: 0=1;
-//! u0=c0 & o0=c1 => +u 1000: 0=0, -u 1000: 0=0;
-//! u0=c1 & o0=c1"
+//! u0=c1 & o0=c1 => -o /home/dabac_rs/a: 0=1, +o /home/dabac_rs/a: 0=2;
+//! u0=c1 & o0=c2 => +u 1000: 0=1, -u 1000: 0=1;
+//! u0=c2 & o0=c2
 //! ```
 //!
 //! [expressions]: crate::expr::Expression
@@ -44,7 +44,7 @@
 //! [AddObjectAttribution]: PolicyChange::AddObjectAttribution
 //! [RemoveObjectAttribution]: PolicyChange::RemoveObjectAttribution
 
-use core::str::FromStr;
+use core::{num::NonZeroU32, str::FromStr};
 
 use kernel::{alloc::KVec, bindings, kvec, prelude::*, str::CString};
 
@@ -161,7 +161,7 @@ impl FromStr for PolicyChange {
 ///
 /// For simplicity the name is encoded as an identifier and values only allow
 /// integers, which are easier to work with in equations.
-type AVP = (usize, i32);
+type AVP = (usize, NonZeroU32);
 
 #[derive(Debug)]
 pub(crate) struct UserAttributes {
@@ -255,7 +255,7 @@ pub(crate) struct Attributions {
 }
 
 impl Attributions {
-    pub(crate) fn get(&self, identifier: usize) -> Option<i32> {
+    pub(crate) fn get(&self, identifier: usize) -> Option<NonZeroU32> {
         self.inner
             .iter()
             .find_map(|&(i, v)| (i == identifier).then_some(v))
