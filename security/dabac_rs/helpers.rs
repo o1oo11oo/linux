@@ -30,6 +30,11 @@ pub(crate) fn file_get_full_name(file: &File) -> Result<CString> {
     Ok(unsafe { CStr::from_char_ptr(full_name as _) }.try_into()?)
 }
 
+pub(crate) fn file_get_inode_number(file: &File) -> kernel::ffi::c_ulong {
+    let inode = unsafe { (*file.as_ptr()).f_inode };
+    unsafe { (*inode).i_ino }
+}
+
 pub(crate) fn vec_clone<T: Clone>(src: &[T], flags: Flags) -> Result<KVec<T>> {
     let mut cp = kvec![];
     cp.extend_from_slice(src, flags)?;

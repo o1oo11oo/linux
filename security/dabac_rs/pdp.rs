@@ -49,6 +49,7 @@ pub(crate) fn set_policy(policy: Policy) {
 /// allocation failures.
 pub(crate) fn file_permission(file: &File, _mask: i32) -> Result<bool> {
     let full_name = helpers::file_get_full_name(file)?;
+    let inode = helpers::file_get_inode_number(file);
 
     // Allow everything unprotected/out of scope
     if !is_protected(&full_name) {
@@ -58,7 +59,7 @@ pub(crate) fn file_permission(file: &File, _mask: i32) -> Result<bool> {
     let uid = Kuid::current_euid().into_uid_in_current_ns();
     let user_attr = pip::get_user_attributes(uid)?;
     let object_attr = pip::get_object_attributes(&full_name)?;
-    pr_info!("User {uid} (attr: {user_attr:?}) ist trying to access {full_name:?} (attr: {object_attr:?})");
+    pr_info!("User {uid} (attr: {user_attr:?}) ist trying to access {full_name:?} (inode: {inode}) (attr: {object_attr:?})");
 
     // Check policy for protected files
     let resolution = resolve(&user_attr, &object_attr)?;
