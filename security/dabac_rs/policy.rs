@@ -16,24 +16,25 @@
 //! PreCondition = Expression
 //! PostCondition = PostCondition "," PostCondition | PolicyChange | ε
 //! PolicyChange = AddUserAttribution | RemoveUserAttribution | AddObjectAttribution | RemoveObjectAttribution
-//! AddUserAttribution = "+u" UserAttribution
-//! RemoveUserAttribution = "-u" UserAttribution
-//! AddObjectAttribution = "+o" ObjectAttribution
-//! RemoveObjectAttribution = "-o" ObjectAttribution
 //!
-//! UserAttribution = usize ":" Attributions
-//! ObjectAttribution = str ":" Attributions
+//! AddUserAttribution = "+u" AddAttribution
+//! RemoveUserAttribution = "-u" RemoveAttribution
+//! AddObjectAttribution = "+o" AddAttribution
+//! RemoveObjectAttribution = "-o" RemoveAttribution
+//! AddAttribution = usize ":" AVP
+//! RemoveAttribution = usize ":" usize
+//!
 //! Attributions = AVP "&" AVP | AVP | ε
 //! AVP = usize "=" NonZeroU32
 //!
-//! UserAttributes = UserAttributes "," UserAttributes | UserAttribution | ε
-//! ObjectAttributes = ObjectAttributes "," ObjectAttributes | ObjectAttribution | ε
+//! UserAttributes = UserAttributes "," UserAttributes | usize ":" Attributions | ε
+//! ObjectAttributes = ObjectAttributes "," ObjectAttributes | usize ":" Attributions | ε
 //! ```
 //!
 //! Here's what an example policy looks like:
 //! ```text
-//! u0=c1 & o0=c1 => -o /home/dabac_rs/a: 0=1, +o /home/dabac_rs/a: 0=2;
-//! u0=c1 & o0=c2 => +u 1000: 0=1, -u 1000: 0=1;
+//! u0=c1 & o0=c1 => -o 1048581: 0, +o 1048581: 0=2;
+//! u0=c1 & o0=c2 => +u 1000: 0=1, -u 1000: 0;
 //! u0=c2 & o0=c2
 //! ```
 //!
@@ -46,10 +47,26 @@
 
 use core::{num::NonZeroU32, str::FromStr};
 
-use kernel::{alloc::KVec, bindings, kvec, prelude::*, str::CString};
+use kernel::{kvec, prelude::*};
 
 use crate::expr::Expression;
 
+/// The maximum amount of attributes possible
+const MAX_ATTR_IDENTIFIERS: usize = 0x100;
+
+/// The maximum uid allowed
+const MAX_UIDS: usize = 0x1000;
+
+/// The minimum inode possible during testing, used to move the inode range down
+///
+/// During testing, inodes of new files were very close to the beginning of this
+/// range, which is why this number was chosen.
+const MIN_INODE: usize = 0x100000;
+
+/// The maximum amount of inodes possible during testing
+const MAX_INODES: usize = 0x1000;
+
+/// Main policy type, stores all [`Rule`]s with their pre- and post-conditions.
 #[derive(Debug)]
 pub(crate) struct Policy {
     pub(crate) rules: KVec<Rule>,
@@ -58,13 +75,13 @@ pub(crate) struct Policy {
 impl FromStr for Policy {
     type Err = Error;
 
-    fn from_str(s: &str) -> core::result::Result<Self, Self::Err> {
+    fn from_str(s: &str) -> Result<Self> {
         let s = s.trim();
         if s.is_empty() {
-            return Ok(Self { rules: kvec![] });
+            return Ok(Self { rules: KVec::new() });
         }
 
-        let mut rules = kvec![];
+        let mut rules = KVec::new();
         for rule in s.split(';') {
             rules.push(rule.parse()?, GFP_KERNEL)?;
         }
@@ -81,11 +98,13 @@ pub(crate) struct Rule {
 impl FromStr for Rule {
     type Err = Error;
 
-    fn from_str(s: &str) -> core::result::Result<Self, Self::Err> {
+    fn from_str(s: &str) -> Result<Self> {
         match s.trim().split_once("=>") {
             None => Ok(Self {
                 pre: s.parse()?,
-                post: PostCondition { changes: kvec![] },
+                post: PostCondition {
+                    changes: KVec::new(),
+                },
             }),
             Some((pre, post)) => Ok(Self {
                 pre: pre.parse()?,
@@ -97,13 +116,23 @@ impl FromStr for Rule {
 
 #[derive(Debug)]
 pub(crate) struct PreCondition {
-    pub(crate) formula: Expression,
+    formula: Expression,
+}
+
+impl PreCondition {
+    pub(crate) fn evaluate(
+        &self,
+        user_attr: &Attributions,
+        object_attr: &Attributions,
+    ) -> Result<bool> {
+        self.formula.evaluate(user_attr, object_attr)
+    }
 }
 
 impl FromStr for PreCondition {
     type Err = Error;
 
-    fn from_str(s: &str) -> core::result::Result<Self, Self::Err> {
+    fn from_str(s: &str) -> Result<Self> {
         Ok(Self {
             formula: s.trim().parse()?,
         })
@@ -118,13 +147,15 @@ pub(crate) struct PostCondition {
 impl FromStr for PostCondition {
     type Err = Error;
 
-    fn from_str(s: &str) -> core::result::Result<Self, Self::Err> {
+    fn from_str(s: &str) -> Result<Self> {
         let s = s.trim();
         if s.is_empty() {
-            return Ok(Self { changes: kvec![] });
+            return Ok(Self {
+                changes: KVec::new(),
+            });
         }
 
-        let mut changes = kvec![];
+        let mut changes = KVec::new();
         for change in s.split(',') {
             changes.push(change.parse()?, GFP_KERNEL)?;
         }
@@ -134,16 +165,16 @@ impl FromStr for PostCondition {
 
 #[derive(Debug)]
 pub(crate) enum PolicyChange {
-    AddUserAttribution(UserAttribution),
-    RemoveUserAttribution(UserAttribution),
-    AddObjectAttribution(ObjectAttribution),
-    RemoveObjectAttribution(ObjectAttribution),
+    AddUserAttribution(AddAttribution),
+    RemoveUserAttribution(RemoveAttribution),
+    AddObjectAttribution(AddAttribution),
+    RemoveObjectAttribution(RemoveAttribution),
 }
 
 impl FromStr for PolicyChange {
     type Err = Error;
 
-    fn from_str(s: &str) -> core::result::Result<Self, Self::Err> {
+    fn from_str(s: &str) -> Result<Self> {
         use PolicyChange::*;
 
         match s.trim().split_at_checked(2) {
@@ -157,126 +188,195 @@ impl FromStr for PolicyChange {
     }
 }
 
-/// An Attribute-Value Pair (AVP) combines an attribute "name" and its value.
-///
-/// For simplicity the name is encoded as an identifier and values only allow
-/// integers, which are easier to work with in equations.
-type AVP = (usize, NonZeroU32);
+#[derive(Debug)]
+pub(crate) struct AddAttribution {
+    pub(crate) entity: usize,
+    pub(crate) identifier: usize,
+    pub(crate) value: NonZeroU32,
+}
+
+impl FromStr for AddAttribution {
+    type Err = Error;
+
+    fn from_str(s: &str) -> Result<Self> {
+        let (e, iv) = s.trim().split_once(":").ok_or(EINVAL)?;
+        let (i, v) = iv.trim().split_once("=").ok_or(EINVAL)?;
+        Ok(Self {
+            entity: e.trim().parse()?,
+            identifier: i.trim().parse()?,
+            value: v.trim().parse()?,
+        })
+    }
+}
 
 #[derive(Debug)]
+pub(crate) struct RemoveAttribution {
+    pub(crate) entity: usize,
+    pub(crate) identifier: usize,
+}
+
+impl FromStr for RemoveAttribution {
+    type Err = Error;
+
+    fn from_str(s: &str) -> Result<Self> {
+        let (e, i) = s.trim().split_once(":").ok_or(EINVAL)?;
+        Ok(Self {
+            entity: e.trim().parse()?,
+            identifier: i.trim().parse()?,
+        })
+    }
+}
+
+/// Top level data type storing all user attributions
+///
+/// Maps user ids to a collection of attributions
+#[derive(Debug)]
 pub(crate) struct UserAttributes {
-    pub(crate) attr: KVec<UserAttribution>,
+    map: KVec<Attributions>,
+}
+
+impl UserAttributes {
+    pub(crate) const fn new() -> Self {
+        Self { map: KVec::new() }
+    }
+
+    pub(crate) fn get(&self, uid: usize) -> Result<&Attributions> {
+        self.map.get(uid).ok_or(EINVAL)
+    }
+
+    pub(crate) fn get_mut(&mut self, uid: usize) -> Result<&mut Attributions> {
+        self.map.get_mut(uid).ok_or(EINVAL)
+    }
 }
 
 impl FromStr for UserAttributes {
     type Err = Error;
 
-    fn from_str(s: &str) -> core::result::Result<Self, Self::Err> {
+    fn from_str(s: &str) -> Result<Self> {
         let s = s.trim();
         if s.is_empty() {
-            return Ok(Self { attr: kvec![] });
+            return Ok(Self { map: KVec::new() });
         }
 
-        let mut attrs = kvec![];
-        for attr in s.split(',') {
-            attrs.push(attr.parse()?, GFP_KERNEL)?;
+        // Since Attributions is not Clone, kvec! cannot be used for initialization
+        let mut attrs = KVec::with_capacity(MAX_UIDS, GFP_KERNEL)?;
+        for _ in 0..MAX_UIDS {
+            attrs.push(Attributions::new(), GFP_KERNEL)?
         }
 
-        Ok(Self { attr: attrs })
+        for s in s.split(',') {
+            match s.trim().split_once(':') {
+                None => return Err(EINVAL),
+                Some((uid, attr)) => match attrs.get_mut(uid.trim().parse::<usize>()?) {
+                    Some(a) => *a = attr.parse()?,
+                    None => return Err(EINVAL),
+                },
+            }
+        }
+
+        Ok(Self { map: attrs })
     }
 }
 
-#[derive(Debug)]
-pub(crate) struct UserAttribution {
-    pub(crate) user: bindings::uid_t,
-    pub(crate) attr: Attributions,
-}
-
-impl FromStr for UserAttribution {
-    type Err = Error;
-
-    fn from_str(s: &str) -> core::result::Result<Self, Self::Err> {
-        match s.trim().split_once(':') {
-            None => Err(EINVAL),
-            Some((uid, attr)) => Ok(Self {
-                user: uid.parse()?,
-                attr: attr.parse()?,
-            }),
-        }
-    }
-}
-
+/// Top level data type storing all object attributions
+///
+/// Maps inode numbers (shifted in range by subtracting a constant) to a
+/// collection of attributions.
 #[derive(Debug)]
 pub(crate) struct ObjectAttributes {
-    pub(crate) attr: KVec<ObjectAttribution>,
+    map: KVec<Attributions>,
+}
+
+impl ObjectAttributes {
+    pub(crate) const fn new() -> Self {
+        Self { map: KVec::new() }
+    }
+
+    pub(crate) fn get(&self, inode: usize) -> Result<&Attributions> {
+        self.map.get(inode - MIN_INODE).ok_or(EINVAL)
+    }
+
+    pub(crate) fn get_mut(&mut self, inode: usize) -> Result<&mut Attributions> {
+        self.map.get_mut(inode - MIN_INODE).ok_or(EINVAL)
+    }
 }
 
 impl FromStr for ObjectAttributes {
     type Err = Error;
 
-    fn from_str(s: &str) -> core::result::Result<Self, Self::Err> {
+    fn from_str(s: &str) -> Result<Self> {
         let s = s.trim();
         if s.is_empty() {
-            return Ok(Self { attr: kvec![] });
+            return Ok(Self { map: KVec::new() });
         }
 
-        let mut attrs = kvec![];
-        for attr in s.split(',') {
-            attrs.push(attr.parse()?, GFP_KERNEL)?;
+        // Since Attributions is not Clone, kvec! cannot be used for initialization
+        let mut attrs = KVec::with_capacity(MAX_INODES, GFP_KERNEL)?;
+        for _ in 0..MAX_INODES {
+            attrs.push(Attributions::new(), GFP_KERNEL)?
         }
 
-        Ok(Self { attr: attrs })
-    }
-}
-
-#[derive(Debug)]
-pub(crate) struct ObjectAttribution {
-    pub(crate) object: CString,
-    pub(crate) attr: Attributions,
-}
-
-impl FromStr for ObjectAttribution {
-    type Err = Error;
-
-    fn from_str(s: &str) -> core::result::Result<Self, Self::Err> {
-        match s.trim().split_once(':') {
-            None => Err(EINVAL),
-            Some((object, attr)) => Ok(Self {
-                object: object.try_into()?,
-                attr: attr.parse()?,
-            }),
+        for s in s.split(',') {
+            match s.trim().split_once(':') {
+                None => return Err(EINVAL),
+                Some((inode, attr)) => {
+                    match attrs.get_mut(inode.trim().parse::<usize>()? - MIN_INODE) {
+                        Some(a) => *a = attr.parse()?,
+                        None => return Err(EINVAL),
+                    }
+                }
+            }
         }
+
+        Ok(Self { map: attrs })
     }
 }
 
 #[derive(Debug)]
 pub(crate) struct Attributions {
-    pub(crate) inner: KVec<AVP>,
+    map: KVec<Option<NonZeroU32>>,
 }
 
 impl Attributions {
+    pub(crate) const fn new() -> Self {
+        Self { map: KVec::new() }
+    }
+
     pub(crate) fn get(&self, identifier: usize) -> Option<NonZeroU32> {
-        self.inner
-            .iter()
-            .find_map(|&(i, v)| (i == identifier).then_some(v))
+        self.map.get(identifier).copied().flatten()
+    }
+
+    pub(crate) fn set(&mut self, identifier: usize, value: Option<NonZeroU32>) -> Result<()> {
+        let entry = self.map.get_mut(identifier).ok_or(EINVAL)?;
+        *entry = value;
+        Ok(())
+    }
+
+    pub(crate) fn add(&mut self, identifier: usize, value: NonZeroU32) -> Result<()> {
+        self.set(identifier, Some(value))
+    }
+
+    pub(crate) fn remove(&mut self, identifier: usize) -> Result<()> {
+        self.set(identifier, None)
     }
 }
 
 impl FromStr for Attributions {
     type Err = Error;
 
-    fn from_str(s: &str) -> core::result::Result<Self, Self::Err> {
+    fn from_str(s: &str) -> Result<Self> {
         let s = s.trim();
         if s.is_empty() {
-            return Ok(Self { inner: kvec![] });
+            return Ok(Self { map: KVec::new() });
         }
 
-        let mut attrs = kvec![];
+        let mut attrs = kvec![None; MAX_ATTR_IDENTIFIERS]?;
         for attr in s.split('&') {
             let (i, v) = attr.trim().split_once('=').ok_or(EINVAL)?;
-            attrs.push((i.trim().parse()?, v.trim().parse()?), GFP_KERNEL)?;
+            let entry = attrs.get_mut(i.trim().parse::<usize>()?).ok_or(EINVAL)?;
+            *entry = Some(v.trim().parse::<NonZeroU32>()?);
         }
 
-        Ok(Self { inner: attrs })
+        Ok(Self { map: attrs })
     }
 }

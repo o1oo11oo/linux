@@ -9,20 +9,15 @@ use core::ops::Deref;
 use kernel::{
     c_str,
     fs::File,
-    pr_info,
     prelude::*,
     sync::{
         global_lock,
         rcu::{self, Rcu},
         ProjectableGlobalLockedBy,
     },
-    task::Kuid,
 };
 
-use crate::{
-    epp, helpers, pip,
-    policy::{Attributions, Policy},
-};
+use crate::{epp, helpers, pip, policy::Policy};
 
 const PROTECTED_PATH: &CStr = c_str!("/home/dabac_rs/");
 
@@ -44,8 +39,8 @@ pub(crate) fn init() -> Result<()> {
     // formula evaluation in a simpler way. Attribute identifiers as usize also
     // allow (ab-)using Vecs as HashMaps. See PIP for an int => string mapping.
 
-    let policy = "u0=c1 & o0=c1 => -o /home/dabac_rs/a: 0=1, +o /home/dabac_rs/a: 0=2;
-        u0=c1 & o0=c2 => +u 1000: 0=1, -u 1000: 0=1;
+    let policy = "u0=c1 & o0=c1 => -o 1048581: 0, +o 1048581: 0=2;
+        u0=c1 & o0=c2 => +u 1000: 0=1, -u 1000: 0;
         u0=c2 & o0=c2"
         .parse()?;
     set_policy(policy)?;
@@ -69,20 +64,18 @@ pub(crate) fn set_policy(policy: Policy) -> Result<()> {
 /// allocation failures.
 pub(crate) fn file_permission(file: &File, _mask: i32) -> Result<bool> {
     let full_name = helpers::file_get_full_name(file)?;
-    let inode = helpers::file_get_inode_number(file);
 
     // Allow everything unprotected/out of scope
     if !is_protected(&full_name) {
         return Ok(true);
     }
 
-    let uid = Kuid::current_euid().into_uid_in_current_ns();
-    let user_attr = pip::get_user_attributes(uid)?;
-    let object_attr = pip::get_object_attributes(&full_name)?;
-    pr_info!("User {uid} (attr: {user_attr:?}) ist trying to access {full_name:?} (inode: {inode}) (attr: {object_attr:?})");
+    // Get entity identifiers for the involved subjects and objects
+    let uid = helpers::get_current_euid();
+    let inode = helpers::file_get_inode_number(file);
 
     // Check policy for protected files
-    let resolution = resolve(&user_attr, &object_attr)?;
+    let resolution = resolve(uid, inode)?;
 
     if resolution {
         pr_info!("Access granted");
@@ -101,7 +94,8 @@ pub(crate) fn file_permission(file: &File, _mask: i32) -> Result<bool> {
 /// The values of the attributes need to be equal.
 ///
 /// If a rule matches, its post-condition is executed by the EPP, if one exists.
-fn resolve(user_attr: &Attributions, object_attr: &Attributions) -> Result<bool> {
+fn resolve(uid: usize, object: usize) -> Result<bool> {
+    // Get a reference to the RCU protected policy
     let policy = POLICY.deref();
     let rcu_guard = rcu::read_lock();
     let Some(policy) = policy.dereference(&rcu_guard) else {
@@ -109,10 +103,26 @@ fn resolve(user_attr: &Attributions, object_attr: &Attributions) -> Result<bool>
         return Ok(false);
     };
 
+    // Get locks for the attribute stores
+    let mut user_attr_guard = pip::USER_ATTRIBUTES.lock();
+    let mut object_attr_guard = pip::OBJECT_ATTRIBUTES.lock();
+
+    // Get the attributes relevant for this decision
+    let user_attr = user_attr_guard.get(uid)?;
+    let object_attr = object_attr_guard.get(object)?;
+
+    pr_info!(
+        "User {uid} (attr: {user_attr:?}) ist trying to access {object:?} (attr: {object_attr:?})"
+    );
+
     for rule in &policy.rules {
-        if rule.pre.formula.evaluate(user_attr, object_attr)? {
+        if rule.pre.evaluate(user_attr, object_attr)? {
             if !rule.post.changes.is_empty() {
-                epp::execute_postcondition(&rule.post)?;
+                epp::execute_postcondition(
+                    &rule.post,
+                    &mut *user_attr_guard,
+                    &mut *object_attr_guard,
+                )?;
             }
 
             return Ok(true);

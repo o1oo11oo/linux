@@ -54,7 +54,7 @@ impl Expression {
 impl FromStr for Expression {
     type Err = Error;
 
-    fn from_str(s: &str) -> core::result::Result<Self, Self::Err> {
+    fn from_str(s: &str) -> Result<Self> {
         let s = s.trim();
         if s.is_empty() {
             return Ok(Self { clauses: kvec![] });
@@ -87,7 +87,7 @@ impl Conjunction {
 impl FromStr for Conjunction {
     type Err = Error;
 
-    fn from_str(s: &str) -> core::result::Result<Self, Self::Err> {
+    fn from_str(s: &str) -> Result<Self> {
         let s = s.trim();
         if s.is_empty() {
             return Ok(Self { clauses: kvec![] });
@@ -120,7 +120,7 @@ impl Literal {
 impl FromStr for Literal {
     type Err = Error;
 
-    fn from_str(s: &str) -> core::result::Result<Self, Self::Err> {
+    fn from_str(s: &str) -> Result<Self> {
         match s.trim().split_at_checked(1) {
             None => Err(EINVAL),
             Some(("!", s)) => Ok(Literal::Negation(s.parse()?)),
@@ -158,7 +158,7 @@ impl Term {
 impl FromStr for Term {
     type Err = Error;
 
-    fn from_str(s: &str) -> core::result::Result<Self, Self::Err> {
+    fn from_str(s: &str) -> Result<Self> {
         let s = s.trim();
         if let Some((left, right)) = s.split_once("<") {
             Ok(Term::Less(left.parse()?, right.parse()?))
@@ -192,7 +192,7 @@ impl Value {
 impl FromStr for Value {
     type Err = Error;
 
-    fn from_str(s: &str) -> core::result::Result<Self, Self::Err> {
+    fn from_str(s: &str) -> Result<Self> {
         match s.trim().split_at_checked(1) {
             None => Err(EINVAL),
             Some(("u", num)) => Ok(Value::UserAttr(num.trim().parse()?)),

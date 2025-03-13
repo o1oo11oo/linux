@@ -12,7 +12,12 @@ use kernel::{
     kvec,
     prelude::*,
     str::{BStr, CStr, CString},
+    task::Kuid,
 };
+
+pub(crate) fn get_current_euid() -> usize {
+    Kuid::current_euid().into_uid_in_current_ns() as _
+}
 
 // based on the unmerged fs bindings
 pub(crate) fn _file_get_name(file: &File) -> &BStr {
@@ -35,7 +40,7 @@ pub(crate) fn file_get_inode_number(file: &File) -> kernel::ffi::c_ulong {
     unsafe { (*inode).i_ino }
 }
 
-pub(crate) fn vec_clone<T: Clone>(src: &[T], flags: Flags) -> Result<KVec<T>> {
+pub(crate) fn _vec_clone<T: Clone>(src: &[T], flags: Flags) -> Result<KVec<T>> {
     let mut cp = kvec![];
     cp.extend_from_slice(src, flags)?;
     Ok(cp)
