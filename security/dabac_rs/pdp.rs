@@ -114,8 +114,8 @@ fn resolve(operation: usize, uid: usize, object: usize) -> Result<bool> {
     let mut object_attr_guard = pip::OBJECT_ATTRIBUTES.lock();
 
     // Get the attributes relevant for this decision
-    let user_attr = user_attr_guard.get(uid)?;
-    let object_attr = object_attr_guard.get(object)?;
+    let user_attr = user_attr_guard.get(uid);
+    let object_attr = object_attr_guard.get(object);
 
     // Collect post-conditions so that they can be executed after all the
     // pre-conditions have been checked

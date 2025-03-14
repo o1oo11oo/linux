@@ -54,24 +54,15 @@
 
 use core::{num::NonZeroU32, str::FromStr};
 
-use kernel::{kvec, prelude::*};
+use kernel::prelude::*;
 
 use crate::expr::Expression;
-
-/// The maximum amount of attributes possible
-const MAX_ATTR_IDENTIFIERS: usize = 0x100;
-
-/// The maximum uid allowed
-const MAX_UIDS: usize = 0x1000;
 
 /// The minimum inode possible during testing, used to move the inode range down
 ///
 /// During testing, inodes of new files were very close to the beginning of this
 /// range, which is why this number was chosen.
 const MIN_INODE: usize = 0x100000;
-
-/// The maximum amount of inodes possible during testing
-const MAX_INODES: usize = 0x1000;
 
 /// Main policy type, stores all [`Rule`]s with their pre- and post-conditions.
 #[derive(Debug)]
@@ -94,6 +85,7 @@ impl FromStr for Policy {
             return Ok(Self { map: KVec::new() });
         }
 
+        // Only allocate the "HashMap" as needed by adding new entries on demand
         let mut rules = KVec::new();
         for rule in s.split(';') {
             let (id, rule) = rule.trim().split_once(":=").ok_or(EINVAL)?;
@@ -107,6 +99,7 @@ impl FromStr for Policy {
             let entry = rules.get_mut(id).ok_or(EINVAL)?;
             entry.push(rule.parse()?, GFP_KERNEL)?;
         }
+
         Ok(Self { map: rules })
     }
 }
@@ -249,6 +242,15 @@ impl FromStr for RemoveAttribution {
     }
 }
 
+/// Empty attributions to return if there are none for the identifier
+///
+/// Since entries to User- and ObjectAttributions are only added as needed, we
+/// might need to return a reference to Attributions that are not actually
+/// stored. In case of `get_mut()` this is easy to solve by first increasing the
+/// length of the internal vector. In case of `get()` though this is not
+/// possible, which is why we return this static empty instance instead.
+static EMPTY_ATTRIBUTIONS: Attributions = Attributions::new();
+
 /// Top level data type storing all user attributions
 ///
 /// Maps user ids to a collection of attributions
@@ -262,12 +264,21 @@ impl UserAttributes {
         Self { map: KVec::new() }
     }
 
-    pub(crate) fn get(&self, uid: usize) -> Result<&Attributions> {
-        self.map.get(uid).ok_or(EINVAL)
+    pub(crate) fn get(&self, uid: usize) -> &Attributions {
+        self.map.get(uid).unwrap_or(&EMPTY_ATTRIBUTIONS)
     }
 
     pub(crate) fn get_mut(&mut self, uid: usize) -> Result<&mut Attributions> {
+        self.ensure_length(uid)?;
         self.map.get_mut(uid).ok_or(EINVAL)
+    }
+
+    fn ensure_length(&mut self, index: usize) -> Result<()> {
+        for _ in self.map.len()..=index {
+            self.map.push(Attributions::new(), GFP_KERNEL)?
+        }
+
+        Ok(())
     }
 }
 
@@ -280,20 +291,19 @@ impl FromStr for UserAttributes {
             return Ok(Self { map: KVec::new() });
         }
 
-        // Since Attributions is not Clone, kvec! cannot be used for initialization
-        let mut attrs = KVec::with_capacity(MAX_UIDS, GFP_KERNEL)?;
-        for _ in 0..MAX_UIDS {
-            attrs.push(Attributions::new(), GFP_KERNEL)?
-        }
-
+        // Only allocate the "HashMap" as needed by adding new entries on demand
+        let mut attrs = KVec::new();
         for s in s.split(',') {
-            match s.trim().split_once(':') {
-                None => return Err(EINVAL),
-                Some((uid, attr)) => match attrs.get_mut(uid.trim().parse::<usize>()?) {
-                    Some(a) => *a = attr.parse()?,
-                    None => return Err(EINVAL),
-                },
+            let (uid, attr) = s.trim().split_once(':').ok_or(EINVAL)?;
+            let uid: usize = uid.trim().parse()?;
+
+            // Add new default entries if some are still missing
+            for _ in attrs.len()..=uid {
+                attrs.push(Attributions::new(), GFP_KERNEL)?
             }
+
+            let entry = attrs.get_mut(uid).ok_or(EINVAL)?;
+            *entry = attr.parse()?;
         }
 
         Ok(Self { map: attrs })
@@ -314,12 +324,23 @@ impl ObjectAttributes {
         Self { map: KVec::new() }
     }
 
-    pub(crate) fn get(&self, inode: usize) -> Result<&Attributions> {
-        self.map.get(inode - MIN_INODE).ok_or(EINVAL)
+    pub(crate) fn get(&self, inode: usize) -> &Attributions {
+        self.map
+            .get(inode - MIN_INODE)
+            .unwrap_or(&EMPTY_ATTRIBUTIONS)
     }
 
     pub(crate) fn get_mut(&mut self, inode: usize) -> Result<&mut Attributions> {
+        self.ensure_length(inode - MIN_INODE)?;
         self.map.get_mut(inode - MIN_INODE).ok_or(EINVAL)
+    }
+
+    fn ensure_length(&mut self, index: usize) -> Result<()> {
+        for _ in self.map.len()..=index {
+            self.map.push(Attributions::new(), GFP_KERNEL)?
+        }
+
+        Ok(())
     }
 }
 
@@ -332,22 +353,19 @@ impl FromStr for ObjectAttributes {
             return Ok(Self { map: KVec::new() });
         }
 
-        // Since Attributions is not Clone, kvec! cannot be used for initialization
-        let mut attrs = KVec::with_capacity(MAX_INODES, GFP_KERNEL)?;
-        for _ in 0..MAX_INODES {
-            attrs.push(Attributions::new(), GFP_KERNEL)?
-        }
-
+        // Only allocate the "HashMap" as needed by adding new entries on demand
+        let mut attrs = KVec::new();
         for s in s.split(',') {
-            match s.trim().split_once(':') {
-                None => return Err(EINVAL),
-                Some((inode, attr)) => {
-                    match attrs.get_mut(inode.trim().parse::<usize>()? - MIN_INODE) {
-                        Some(a) => *a = attr.parse()?,
-                        None => return Err(EINVAL),
-                    }
-                }
+            let (inode, attr) = s.trim().split_once(':').ok_or(EINVAL)?;
+            let index = inode.trim().parse::<usize>()? - MIN_INODE;
+
+            // Add new default entries if some are still missing
+            for _ in attrs.len()..=index {
+                attrs.push(Attributions::new(), GFP_KERNEL)?
             }
+
+            let entry = attrs.get_mut(index).ok_or(EINVAL)?;
+            *entry = attr.parse()?;
         }
 
         Ok(Self { map: attrs })
@@ -369,8 +387,11 @@ impl Attributions {
     }
 
     pub(crate) fn set(&mut self, identifier: usize, value: Option<NonZeroU32>) -> Result<()> {
+        self.ensure_length(identifier)?;
+
         let entry = self.map.get_mut(identifier).ok_or(EINVAL)?;
         *entry = value;
+
         Ok(())
     }
 
@@ -380,6 +401,14 @@ impl Attributions {
 
     pub(crate) fn remove(&mut self, identifier: usize) -> Result<()> {
         self.set(identifier, None)
+    }
+
+    fn ensure_length(&mut self, index: usize) -> Result<()> {
+        for _ in self.map.len()..=index {
+            self.map.push(None, GFP_KERNEL)?
+        }
+
+        Ok(())
     }
 }
 
@@ -392,11 +421,19 @@ impl FromStr for Attributions {
             return Ok(Self { map: KVec::new() });
         }
 
-        let mut attrs = kvec![None; MAX_ATTR_IDENTIFIERS]?;
+        // Only allocate the "HashMap" as needed by adding new entries on demand
+        let mut attrs = KVec::new();
         for attr in s.split('&') {
-            let (i, v) = attr.trim().split_once('=').ok_or(EINVAL)?;
-            let entry = attrs.get_mut(i.trim().parse::<usize>()?).ok_or(EINVAL)?;
-            *entry = Some(v.trim().parse::<NonZeroU32>()?);
+            let (index, value) = attr.trim().split_once('=').ok_or(EINVAL)?;
+            let index: usize = index.trim().parse()?;
+
+            // Add new default entries if some are still missing
+            for _ in attrs.len()..=index {
+                attrs.push(None, GFP_KERNEL)?
+            }
+
+            let entry = attrs.get_mut(index).ok_or(EINVAL)?;
+            *entry = Some(value.trim().parse::<NonZeroU32>()?);
         }
 
         Ok(Self { map: attrs })
