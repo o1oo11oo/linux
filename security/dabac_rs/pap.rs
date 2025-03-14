@@ -26,6 +26,14 @@ pub(crate) fn update_object_attr(attrs: &[u8]) -> Result<()> {
     Ok(())
 }
 
+pub(crate) fn update_env_attr(attrs: &[u8]) -> Result<()> {
+    let attrs = str::from_utf8(attrs)?.parse()?;
+    pr_info!("Updating environmental attributes to: {attrs:?}");
+    pip::set_env_attributes(attrs)?;
+
+    Ok(())
+}
+
 pub(crate) fn update_policy(policy: &[u8]) -> Result<()> {
     // TODO: check for policy replacement permissions
     let policy = str::from_utf8(policy)?.parse()?;

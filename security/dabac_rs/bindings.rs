@@ -153,6 +153,21 @@ pub extern "C" fn dabac_rs_update_object_attr(
     update_policy_or_attrs(pap::update_object_attr, ptr, length)
 }
 
+/// Update the environmental attributes
+///
+/// Called from the C implementation of the dabac_rs securityfs. Small glue
+/// function that copies the data from userspace before delegating to the actual
+/// function in the PAP.
+#[no_mangle]
+pub extern "C" fn dabac_rs_update_env_attr(
+    _file: *mut bindings::file,
+    ptr: UserPtr,
+    length: c_ulong,
+    _offset: c_longlong,
+) -> c_int {
+    update_policy_or_attrs(pap::update_env_attr, ptr, length)
+}
+
 /// Update the policy
 ///
 /// Called from the C implementation of the dabac_rs securityfs. Small glue

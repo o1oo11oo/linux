@@ -16,7 +16,7 @@
 //! Conjunction = Conjunction "&" Conjunction | Literal | ε
 //! Literal = Term | "!" Term
 //! Term = Value "<" Value | Value "=" Value | Value ">" Value
-//! Value = "u" usize | "o" usize | "c" NonZeroU32
+//! Value = "u" usize | "o" usize | "e" usize | "c" NonZeroU32
 //! ```
 //!
 //! Note that values can either be constants (starting with `"c"`) or
@@ -42,10 +42,11 @@ impl Expression {
         &self,
         user_attr: &Attributions,
         object_attr: &Attributions,
+        env_attr: &Attributions,
     ) -> Result<bool> {
         let mut acc = false;
         for clause in &self.clauses {
-            acc = acc || clause.evaluate(user_attr, object_attr)?;
+            acc = acc || clause.evaluate(user_attr, object_attr, env_attr)?;
         }
         Ok(acc)
     }
@@ -75,10 +76,15 @@ struct Conjunction {
 }
 
 impl Conjunction {
-    fn evaluate(&self, user_attr: &Attributions, object_attr: &Attributions) -> Result<bool> {
+    fn evaluate(
+        &self,
+        user_attr: &Attributions,
+        object_attr: &Attributions,
+        env_attr: &Attributions,
+    ) -> Result<bool> {
         let mut acc = true;
         for clause in &self.clauses {
-            acc = acc && clause.evaluate(user_attr, object_attr)?;
+            acc = acc && clause.evaluate(user_attr, object_attr, env_attr)?;
         }
         Ok(acc)
     }
@@ -109,10 +115,17 @@ enum Literal {
 }
 
 impl Literal {
-    fn evaluate(&self, user_attr: &Attributions, object_attr: &Attributions) -> Result<bool> {
+    fn evaluate(
+        &self,
+        user_attr: &Attributions,
+        object_attr: &Attributions,
+        env_attr: &Attributions,
+    ) -> Result<bool> {
         match self {
-            Literal::Identity(term) => term.evaluate(user_attr, object_attr),
-            Literal::Negation(term) => term.evaluate(user_attr, object_attr).and_then(|x| Ok(!x)),
+            Literal::Identity(term) => term.evaluate(user_attr, object_attr, env_attr),
+            Literal::Negation(term) => term
+                .evaluate(user_attr, object_attr, env_attr)
+                .and_then(|x| Ok(!x)),
         }
     }
 }
@@ -137,20 +150,19 @@ enum Term {
 }
 
 impl Term {
-    fn evaluate(&self, user_attr: &Attributions, object_attr: &Attributions) -> Result<bool> {
+    fn evaluate(
+        &self,
+        user_attr: &Attributions,
+        object_attr: &Attributions,
+        env_attr: &Attributions,
+    ) -> Result<bool> {
         match self {
-            Term::Less(left, right) => {
-                Ok(left.evaluate(user_attr, object_attr)?
-                    < right.evaluate(user_attr, object_attr)?)
-            }
-            Term::Equals(left, right) => {
-                Ok(left.evaluate(user_attr, object_attr)?
-                    == right.evaluate(user_attr, object_attr)?)
-            }
-            Term::Greater(left, right) => {
-                Ok(left.evaluate(user_attr, object_attr)?
-                    > right.evaluate(user_attr, object_attr)?)
-            }
+            Term::Less(left, right) => Ok(left.evaluate(user_attr, object_attr, env_attr)?
+                < right.evaluate(user_attr, object_attr, env_attr)?),
+            Term::Equals(left, right) => Ok(left.evaluate(user_attr, object_attr, env_attr)?
+                == right.evaluate(user_attr, object_attr, env_attr)?),
+            Term::Greater(left, right) => Ok(left.evaluate(user_attr, object_attr, env_attr)?
+                > right.evaluate(user_attr, object_attr, env_attr)?),
         }
     }
 }
@@ -176,14 +188,21 @@ impl FromStr for Term {
 enum Value {
     UserAttr(usize),
     ObjectAttr(usize),
+    EnvAttr(usize),
     Constant(NonZeroU32),
 }
 
 impl Value {
-    fn evaluate(&self, user_attr: &Attributions, object_attr: &Attributions) -> Result<NonZeroU32> {
+    fn evaluate(
+        &self,
+        user_attr: &Attributions,
+        object_attr: &Attributions,
+        env_attr: &Attributions,
+    ) -> Result<NonZeroU32> {
         match self {
             Value::UserAttr(identifier) => user_attr.get(*identifier).ok_or(EINVAL),
             Value::ObjectAttr(identifier) => object_attr.get(*identifier).ok_or(EINVAL),
+            Value::EnvAttr(identifier) => env_attr.get(*identifier).ok_or(EINVAL),
             Value::Constant(x) => Ok(*x),
         }
     }
@@ -197,6 +216,7 @@ impl FromStr for Value {
             None => Err(EINVAL),
             Some(("u", num)) => Ok(Value::UserAttr(num.trim().parse()?)),
             Some(("o", num)) => Ok(Value::ObjectAttr(num.trim().parse()?)),
+            Some(("e", num)) => Ok(Value::EnvAttr(num.trim().parse()?)),
             Some(("c", num)) => Ok(Value::Constant(num.trim().parse()?)),
             Some(_) => Err(EINVAL),
         }

@@ -4,8 +4,6 @@
 //!
 //! Policy Decision Point for Rust-based DABAC LSM.
 
-use core::ops::Deref;
-
 use kernel::{
     bindings, c_str,
     fs::File,
@@ -17,7 +15,10 @@ use kernel::{
     },
 };
 
-use crate::{epp, helpers, pip, policy::Policy};
+use crate::{
+    epp, helpers, pip,
+    policy::{self, Policy},
+};
 
 const PROTECTED_PATH: &CStr = c_str!("/home/dabac_rs/");
 
@@ -46,9 +47,12 @@ pub(crate) fn init() -> Result<()> {
     let policy = "0:= u0=c1 & o0=c1;
         1:= u0=c1 & o0=c1 => -o 1048581: 0, +o 1048581: 0=2;
         0:= u0=c1 & o0=c2 | u0=c2 & o0=c2;
-        1:= u0=c1 & o0=c2 | u0=c2 & o0=c2"
+        1:= u0=c1 & o0=c2 | u0=c2 & o0=c2;
+        0:= o0=c3 & e0>c16;
+        1:= o0=c3 & e0>c16"
         .parse()?;
     set_policy(policy)?;
+    pr_info!("Policy initialized");
 
     Ok(())
 }
@@ -101,13 +105,20 @@ pub(crate) fn file_permission(file: &File, mask: i32) -> Result<bool> {
 ///
 /// If a rule matches, its post-condition is executed by the EPP, if one exists.
 fn resolve(operation: usize, uid: usize, object: usize) -> Result<bool> {
-    // Get a reference to the RCU protected policy
-    let policy = POLICY.deref();
+    // Enter RCU read critical section for policy and env attributes
     let rcu_guard = rcu::read_lock();
-    let Some(policy) = policy.dereference(&rcu_guard) else {
+
+    // Get a reference to the RCU protected policy
+    let Some(policy) = POLICY.dereference(&rcu_guard) else {
         // No policy defined => default deny
         return Ok(false);
     };
+
+    // Get a reference to the RCU protected environmental attributes
+    // Get a default if none are set, which makes the other code/checks easier
+    let env_attr = pip::ENV_ATTRIBUTES
+        .dereference(&rcu_guard)
+        .unwrap_or(&policy::EMPTY_ATTRIBUTIONS);
 
     // Get locks for the attribute stores
     let mut user_attr_guard = pip::USER_ATTRIBUTES.lock();
@@ -130,7 +141,7 @@ fn resolve(operation: usize, uid: usize, object: usize) -> Result<bool> {
     let mut res = false;
 
     for rule in rules {
-        if rule.pre.evaluate(user_attr, object_attr)? {
+        if rule.pre.evaluate(user_attr, object_attr, env_attr)? {
             res = true;
             if !rule.post.changes.is_empty() {
                 post_conditions.push(&rule.post, GFP_KERNEL)?;

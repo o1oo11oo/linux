@@ -6,9 +6,13 @@
 
 use core::num::NonZeroU32;
 
-use kernel::{global_lock, prelude::*};
+use kernel::{
+    global_lock,
+    prelude::*,
+    sync::{rcu::Rcu, ProjectableGlobalLockedBy},
+};
 
-use crate::policy::{ObjectAttributes, UserAttributes};
+use crate::policy::{Attributions, ObjectAttributes, UserAttributes};
 
 global_lock! {
     // SAFETY: Initialized in LSM initializer before first use.
@@ -20,12 +24,24 @@ global_lock! {
     pub(crate) unsafe(uninit) static OBJECT_ATTRIBUTES: Mutex<ObjectAttributes> = ObjectAttributes::new();
 }
 
+global_lock! {
+    // SAFETY: Initialized in LSM initializer before first use.
+    pub(crate) unsafe(uninit) static ENV_ATTR_WRITE_GUARD: Mutex<()> = ();
+}
+
+pub(crate) static ENV_ATTRIBUTES: ProjectableGlobalLockedBy<
+    Rcu<KBox<Attributions>>,
+    ENV_ATTR_WRITE_GUARD,
+> = ProjectableGlobalLockedBy::new(Rcu::null());
+
 /// Initialize the PDP during LSM initialization
 pub(crate) fn init() -> Result<()> {
-    // SAFETY: Called exactly once.
-    unsafe { USER_ATTRIBUTES.init() };
-    // SAFETY: Called exactly once.
-    unsafe { OBJECT_ATTRIBUTES.init() };
+    // SAFETY: All initializers are called exactly once.
+    unsafe {
+        USER_ATTRIBUTES.init();
+        OBJECT_ATTRIBUTES.init();
+        ENV_ATTR_WRITE_GUARD.init();
+    }
 
     // The attributes are encoded because it is simpler to work with
     // (implementing Copy means they use no lifetimes) and can be used for
@@ -49,14 +65,33 @@ pub(crate) fn init() -> Result<()> {
     // Object attribute values:
     // - 1 => "secret"
     // - 2 => "open"
-    // - 3 => "pdf"
-    // - 4 => "doc"
+    // - 3 => "open iff hour of day > 16"
+    // - 4 => "pdf"
+    // - 5 => "doc"
+
+    // Env attribute identifiers:
+    // - 0 => hour of day
+    // - 1 => day of week
+
+    // Env attribute values:
+    // - hour of day: 1-24 (1-indexed because 0 is used for the Option niche)
+    // - day of week: 1-7
 
     let attrs = "0: 0=1 & 1=3, 1000: 0=2 & 1=4".parse()?;
     set_user_attributes(attrs);
+    pr_info!("User attributes initialized");
 
-    let attrs = "1048581: 0=1 & 1=3, 1048582: 0=2 & 1=4".parse()?;
+    let attrs = "1048581: 0=1 & 1=3,
+        1048582: 0=2 & 1=5,
+        1048588: 0=3 & 1=5,
+        1048589: 0=3 & 1=5"
+        .parse()?;
     set_object_attributes(attrs);
+    pr_info!("Object attributes initialized");
+
+    let attrs = "0=1 & 1=1".parse()?;
+    set_env_attributes(attrs)?;
+    pr_info!("Environmental attributes initialized");
 
     Ok(())
 }
@@ -69,6 +104,15 @@ pub(crate) fn set_user_attributes(attrs: UserAttributes) {
 pub(crate) fn set_object_attributes(attrs: ObjectAttributes) {
     let mut guard = OBJECT_ATTRIBUTES.lock();
     *guard = attrs;
+}
+
+pub(crate) fn set_env_attributes(attrs: Attributions) -> Result<()> {
+    let mut guard = ENV_ATTR_WRITE_GUARD.lock();
+    let mut env_attr_writer = ENV_ATTRIBUTES.as_mut(&mut guard);
+    let attrs = KBox::new(attrs, GFP_KERNEL)?;
+    env_attr_writer.as_mut().read_copy_update(|_| Some(attrs));
+
+    Ok(())
 }
 
 pub(crate) fn add_user_attribution(

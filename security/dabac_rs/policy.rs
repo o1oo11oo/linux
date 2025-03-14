@@ -139,8 +139,9 @@ impl PreCondition {
         &self,
         user_attr: &Attributions,
         object_attr: &Attributions,
+        env_attr: &Attributions,
     ) -> Result<bool> {
-        self.formula.evaluate(user_attr, object_attr)
+        self.formula.evaluate(user_attr, object_attr, env_attr)
     }
 }
 
@@ -249,7 +250,7 @@ impl FromStr for RemoveAttribution {
 /// stored. In case of `get_mut()` this is easy to solve by first increasing the
 /// length of the internal vector. In case of `get()` though this is not
 /// possible, which is why we return this static empty instance instead.
-static EMPTY_ATTRIBUTIONS: Attributions = Attributions::new();
+pub(crate) static EMPTY_ATTRIBUTIONS: Attributions = Attributions::new();
 
 /// Top level data type storing all user attributions
 ///
