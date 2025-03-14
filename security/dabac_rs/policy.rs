@@ -6,12 +6,18 @@
 //! memory. They are mainly used by the PDP and the PIP. Both policy and
 //! attribute assignments can be parsed from strings using the [`str::parse`]
 //! function. The pre-condition [expressions] are implemented in the [`expr`]
-//! module and documented there. The policy and attributions are described by
-//! the following EBNF:
+//! module and documented there.
+//!
+//! For each possible operation, the policy contains multiple rules. To evaluate
+//! them, all pre-conditions for the operation are evaluated. After all rules
+//! are tried, the post-conditions of the ones evaluating to true are executed
+//! in order of their definition.
+//!
+//! The policy and attributions are described by the following EBNF:
 //!
 //! ```EBNF
 //! Policy = Rule ";" Rule | Rule | ε
-//! Rule = PreCondition "=>" PostCondition | PreCondition
+//! Rule = usize := PreCondition "=>" PostCondition | PreCondition
 //!
 //! PreCondition = Expression
 //! PostCondition = PostCondition "," PostCondition | PolicyChange | ε
@@ -33,9 +39,10 @@
 //!
 //! Here's what an example policy looks like:
 //! ```text
-//! u0=c1 & o0=c1 => -o 1048581: 0, +o 1048581: 0=2;
-//! u0=c1 & o0=c2 => +u 1000: 0=1, -u 1000: 0;
-//! u0=c2 & o0=c2
+//! 0:= u0=c1 & o0=c1;
+//! 1:= u0=c1 & o0=c1 => -o 1048581: 0, +o 1048581: 0=2;
+//! 0:= u0=c1 & o0=c2 | u0=c2 & o0=c2;
+//! 1:= u0=c1 & o0=c2 | u0=c2 & o0=c2
 //! ```
 //!
 //! [expressions]: crate::expr::Expression
@@ -69,7 +76,13 @@ const MAX_INODES: usize = 0x1000;
 /// Main policy type, stores all [`Rule`]s with their pre- and post-conditions.
 #[derive(Debug)]
 pub(crate) struct Policy {
-    pub(crate) rules: KVec<Rule>,
+    map: KVec<KVec<Rule>>,
+}
+
+impl Policy {
+    pub(crate) fn get(&self, operation: usize) -> Option<&KVec<Rule>> {
+        self.map.get(operation)
+    }
 }
 
 impl FromStr for Policy {
@@ -78,14 +91,23 @@ impl FromStr for Policy {
     fn from_str(s: &str) -> Result<Self> {
         let s = s.trim();
         if s.is_empty() {
-            return Ok(Self { rules: KVec::new() });
+            return Ok(Self { map: KVec::new() });
         }
 
         let mut rules = KVec::new();
         for rule in s.split(';') {
-            rules.push(rule.parse()?, GFP_KERNEL)?;
+            let (id, rule) = rule.trim().split_once(":=").ok_or(EINVAL)?;
+            let id: usize = id.trim().parse()?;
+
+            // Add new default entries if some are still missing
+            for _ in rules.len()..=id {
+                rules.push(KVec::new(), GFP_KERNEL)?
+            }
+
+            let entry = rules.get_mut(id).ok_or(EINVAL)?;
+            entry.push(rule.parse()?, GFP_KERNEL)?;
         }
-        Ok(Self { rules })
+        Ok(Self { map: rules })
     }
 }
 
