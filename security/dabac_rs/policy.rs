@@ -54,7 +54,7 @@
 
 use core::{num::NonZeroU32, str::FromStr};
 
-use kernel::prelude::*;
+use kernel::{alloc::Flags, prelude::*};
 
 use crate::expr::Expression;
 
@@ -269,14 +269,17 @@ impl UserAttributes {
         self.map.get(uid).unwrap_or(&EMPTY_ATTRIBUTIONS)
     }
 
-    pub(crate) fn get_mut(&mut self, uid: usize) -> Result<&mut Attributions> {
-        self.ensure_length(uid)?;
+    pub(crate) fn get_mut(&mut self, uid: usize, flags: Flags) -> Result<&mut Attributions> {
+        self.ensure_length(uid, flags)?;
         self.map.get_mut(uid).ok_or(EINVAL)
     }
 
-    fn ensure_length(&mut self, index: usize) -> Result<()> {
+    // Since this might be called from within an RCU read critical section,
+    // allow specifying the flags when it is used instead of just using
+    // GFP_KERNEL by default.
+    fn ensure_length(&mut self, index: usize, flags: Flags) -> Result<()> {
         for _ in self.map.len()..=index {
-            self.map.push(Attributions::new(), GFP_KERNEL)?
+            self.map.push(Attributions::new(), flags)?
         }
 
         Ok(())
@@ -331,14 +334,17 @@ impl ObjectAttributes {
             .unwrap_or(&EMPTY_ATTRIBUTIONS)
     }
 
-    pub(crate) fn get_mut(&mut self, inode: usize) -> Result<&mut Attributions> {
-        self.ensure_length(inode - MIN_INODE)?;
+    pub(crate) fn get_mut(&mut self, inode: usize, flags: Flags) -> Result<&mut Attributions> {
+        self.ensure_length(inode - MIN_INODE, flags)?;
         self.map.get_mut(inode - MIN_INODE).ok_or(EINVAL)
     }
 
-    fn ensure_length(&mut self, index: usize) -> Result<()> {
+    // Since this might be called from within an RCU read critical section,
+    // allow specifying the flags when it is used instead of just using
+    // GFP_KERNEL by default.
+    fn ensure_length(&mut self, index: usize, flags: Flags) -> Result<()> {
         for _ in self.map.len()..=index {
-            self.map.push(Attributions::new(), GFP_KERNEL)?
+            self.map.push(Attributions::new(), flags)?
         }
 
         Ok(())

@@ -105,7 +105,15 @@ pub(crate) fn file_permission(file: &File, mask: i32) -> Result<bool> {
 ///
 /// If a rule matches, its post-condition is executed by the EPP, if one exists.
 fn resolve(operation: usize, uid: usize, object: usize) -> Result<bool> {
+    // Get locks for the attribute stores before entering RCU read critical
+    // section as to not block during it
+    let mut user_attr_guard = pip::USER_ATTRIBUTES.lock();
+    let mut object_attr_guard = pip::OBJECT_ATTRIBUTES.lock();
+
     // Enter RCU read critical section for policy and env attributes
+    // This means we are not allowed to block anymore, so we use GFP_NOWAIT for
+    // all allocations during this section. Under memory pressure this could
+    // fail, but an access getting denied is an acceptable consequence
     let rcu_guard = rcu::read_lock();
 
     // Get a reference to the RCU protected policy
@@ -119,10 +127,6 @@ fn resolve(operation: usize, uid: usize, object: usize) -> Result<bool> {
     let env_attr = pip::ENV_ATTRIBUTES
         .dereference(&rcu_guard)
         .unwrap_or(&policy::EMPTY_ATTRIBUTIONS);
-
-    // Get locks for the attribute stores
-    let mut user_attr_guard = pip::USER_ATTRIBUTES.lock();
-    let mut object_attr_guard = pip::OBJECT_ATTRIBUTES.lock();
 
     // Get the attributes relevant for this decision
     let user_attr = user_attr_guard.get(uid);
@@ -144,13 +148,18 @@ fn resolve(operation: usize, uid: usize, object: usize) -> Result<bool> {
         if rule.pre.evaluate(user_attr, object_attr, env_attr)? {
             res = true;
             if !rule.post.changes.is_empty() {
-                post_conditions.push(&rule.post, GFP_KERNEL)?;
+                post_conditions.push(&rule.post, GFP_NOWAIT)?;
             }
         }
     }
 
     for post in post_conditions {
-        epp::execute_postcondition(post, &mut user_attr_guard, &mut object_attr_guard)?;
+        epp::execute_postcondition(
+            post,
+            &mut user_attr_guard,
+            &mut object_attr_guard,
+            GFP_NOWAIT,
+        )?;
     }
 
     Ok(res)

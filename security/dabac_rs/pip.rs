@@ -7,6 +7,7 @@
 use core::num::NonZeroU32;
 
 use kernel::{
+    alloc::Flags,
     global_lock,
     prelude::*,
     sync::{rcu::Rcu, ProjectableGlobalLockedBy},
@@ -120,8 +121,9 @@ pub(crate) fn add_user_attribution(
     uid: usize,
     identifier: usize,
     value: NonZeroU32,
+    flags: Flags,
 ) -> Result<()> {
-    let entry = user_attr.get_mut(uid)?;
+    let entry = user_attr.get_mut(uid, flags)?;
     entry.add(identifier, value)
 }
 
@@ -129,8 +131,9 @@ pub(crate) fn remove_user_attribution(
     user_attr: &mut UserAttributes,
     uid: usize,
     identifier: usize,
+    flags: Flags,
 ) -> Result<()> {
-    let entry = user_attr.get_mut(uid)?;
+    let entry = user_attr.get_mut(uid, flags)?;
     entry.remove(identifier)
 }
 
@@ -139,8 +142,9 @@ pub(crate) fn add_object_attribution(
     inode: usize,
     identifier: usize,
     value: NonZeroU32,
+    flags: Flags,
 ) -> Result<()> {
-    let entry = object_attr.get_mut(inode)?;
+    let entry = object_attr.get_mut(inode, flags)?;
     entry.add(identifier, value)
 }
 
@@ -148,7 +152,8 @@ pub(crate) fn remove_object_attribution(
     object_attr: &mut ObjectAttributes,
     inode: usize,
     identifier: usize,
+    flags: Flags,
 ) -> Result<()> {
-    let entry = object_attr.get_mut(inode)?;
+    let entry = object_attr.get_mut(inode, flags)?;
     entry.remove(identifier)
 }

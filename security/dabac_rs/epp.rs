@@ -4,7 +4,7 @@
 //!
 //! Event Processing Point for Rust-based DABAC LSM.
 
-use kernel::prelude::*;
+use kernel::{alloc::Flags, prelude::*};
 
 use crate::{
     pip,
@@ -16,6 +16,7 @@ pub(crate) fn execute_postcondition(
     post: &PostCondition,
     user_attr: &mut UserAttributes,
     object_attr: &mut ObjectAttributes,
+    flags: Flags,
 ) -> Result<()> {
     pr_info!("Executing post-condition: {post:?}");
 
@@ -26,19 +27,24 @@ pub(crate) fn execute_postcondition(
                 addition.entity,
                 addition.identifier,
                 addition.value,
+                flags,
             )?,
             PolicyChange::RemoveUserAttribution(removal) => {
-                pip::remove_user_attribution(user_attr, removal.entity, removal.identifier)?
+                pip::remove_user_attribution(user_attr, removal.entity, removal.identifier, flags)?
             }
             PolicyChange::AddObjectAttribution(addition) => pip::add_object_attribution(
                 object_attr,
                 addition.entity,
                 addition.identifier,
                 addition.value,
+                flags,
             )?,
-            PolicyChange::RemoveObjectAttribution(removal) => {
-                pip::remove_object_attribution(object_attr, removal.entity, removal.identifier)?
-            }
+            PolicyChange::RemoveObjectAttribution(removal) => pip::remove_object_attribution(
+                object_attr,
+                removal.entity,
+                removal.identifier,
+                flags,
+            )?,
         }
     }
 
