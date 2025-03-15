@@ -45,7 +45,7 @@ pub(crate) fn init() -> Result<()> {
     // - 1: file write
 
     let policy = "0:= u0=c1 & o0=c1;
-        1:= u0=c1 & o0=c1 => -o 1048581: 0, +o 1048581: 0=2;
+        1:= u0=c1 & o0=c1 => +o 1048581: 0=2;
         0:= u0=c1 & o0=c2 | u0=c2 & o0=c2;
         1:= u0=c1 & o0=c2 | u0=c2 & o0=c2;
         0:= o0=c3 & e0>c16;
@@ -137,7 +137,7 @@ fn resolve(operation: usize, uid: usize, object: usize) -> Result<bool> {
     let mut post_conditions = KVec::new();
 
     pr_info!(
-        "Operation {operation}: user {uid} (attr: {user_attr:?}) ist trying to access {object:?} (attr: {object_attr:?})"
+        "Operation {operation}: user {uid} (attr: {user_attr:?}) is trying to access {object:?} (attr: {object_attr:?})"
     );
 
     // Get the rules for this operation, if it is a valid one
@@ -145,7 +145,7 @@ fn resolve(operation: usize, uid: usize, object: usize) -> Result<bool> {
     let mut res = false;
 
     for rule in rules {
-        if rule.pre.evaluate(user_attr, object_attr, env_attr)? {
+        if rule.pre.evaluate(user_attr, object_attr, env_attr) {
             res = true;
             if !rule.post.changes.is_empty() {
                 post_conditions.push(&rule.post, GFP_NOWAIT)?;

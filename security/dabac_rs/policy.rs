@@ -140,7 +140,7 @@ impl PreCondition {
         user_attr: &Attributions,
         object_attr: &Attributions,
         env_attr: &Attributions,
-    ) -> Result<bool> {
+    ) -> bool {
         self.formula.evaluate(user_attr, object_attr, env_attr)
     }
 }

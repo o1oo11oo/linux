@@ -43,12 +43,10 @@ impl Expression {
         user_attr: &Attributions,
         object_attr: &Attributions,
         env_attr: &Attributions,
-    ) -> Result<bool> {
-        let mut acc = false;
-        for clause in &self.clauses {
-            acc = acc || clause.evaluate(user_attr, object_attr, env_attr)?;
-        }
-        Ok(acc)
+    ) -> bool {
+        self.clauses.iter().fold(false, |acc, clause| {
+            acc || clause.evaluate(user_attr, object_attr, env_attr)
+        })
     }
 }
 
@@ -81,12 +79,10 @@ impl Conjunction {
         user_attr: &Attributions,
         object_attr: &Attributions,
         env_attr: &Attributions,
-    ) -> Result<bool> {
-        let mut acc = true;
-        for clause in &self.clauses {
-            acc = acc && clause.evaluate(user_attr, object_attr, env_attr)?;
-        }
-        Ok(acc)
+    ) -> bool {
+        self.clauses.iter().fold(true, |acc, clause| {
+            acc && clause.evaluate(user_attr, object_attr, env_attr)
+        })
     }
 }
 
@@ -120,12 +116,10 @@ impl Literal {
         user_attr: &Attributions,
         object_attr: &Attributions,
         env_attr: &Attributions,
-    ) -> Result<bool> {
+    ) -> bool {
         match self {
             Literal::Identity(term) => term.evaluate(user_attr, object_attr, env_attr),
-            Literal::Negation(term) => term
-                .evaluate(user_attr, object_attr, env_attr)
-                .and_then(|x| Ok(!x)),
+            Literal::Negation(term) => !term.evaluate(user_attr, object_attr, env_attr),
         }
     }
 }
@@ -143,10 +137,17 @@ impl FromStr for Literal {
 }
 
 #[derive(Debug)]
-enum Term {
-    Less(Value, Value),
-    Equals(Value, Value),
-    Greater(Value, Value),
+enum Operation {
+    Less,
+    Equals,
+    Greater,
+}
+
+#[derive(Debug)]
+struct Term {
+    left: Value,
+    right: Value,
+    op: Operation,
 }
 
 impl Term {
@@ -155,14 +156,22 @@ impl Term {
         user_attr: &Attributions,
         object_attr: &Attributions,
         env_attr: &Attributions,
-    ) -> Result<bool> {
-        match self {
-            Term::Less(left, right) => Ok(left.evaluate(user_attr, object_attr, env_attr)?
-                < right.evaluate(user_attr, object_attr, env_attr)?),
-            Term::Equals(left, right) => Ok(left.evaluate(user_attr, object_attr, env_attr)?
-                == right.evaluate(user_attr, object_attr, env_attr)?),
-            Term::Greater(left, right) => Ok(left.evaluate(user_attr, object_attr, env_attr)?
-                > right.evaluate(user_attr, object_attr, env_attr)?),
+    ) -> bool {
+        // If an attribute that is not set or found is requested for evaluation,
+        // this is treated as an unfulfillable requirement, which means the
+        // resolution is always false, even if both arguments would return as
+        // None, similar to how NaN != NaN.
+        let Some(left) = self.left.evaluate(user_attr, object_attr, env_attr) else {
+            return false;
+        };
+        let Some(right) = self.right.evaluate(user_attr, object_attr, env_attr) else {
+            return false;
+        };
+
+        match self.op {
+            Operation::Less => left < right,
+            Operation::Equals => left == right,
+            Operation::Greater => left > right,
         }
     }
 }
@@ -173,11 +182,23 @@ impl FromStr for Term {
     fn from_str(s: &str) -> Result<Self> {
         let s = s.trim();
         if let Some((left, right)) = s.split_once("<") {
-            Ok(Term::Less(left.parse()?, right.parse()?))
+            Ok(Term {
+                left: left.parse()?,
+                right: right.parse()?,
+                op: Operation::Less,
+            })
         } else if let Some((left, right)) = s.split_once("=") {
-            Ok(Term::Equals(left.parse()?, right.parse()?))
+            Ok(Term {
+                left: left.parse()?,
+                right: right.parse()?,
+                op: Operation::Equals,
+            })
         } else if let Some((left, right)) = s.split_once(">") {
-            Ok(Term::Greater(left.parse()?, right.parse()?))
+            Ok(Term {
+                left: left.parse()?,
+                right: right.parse()?,
+                op: Operation::Greater,
+            })
         } else {
             Err(EINVAL)
         }
@@ -198,12 +219,12 @@ impl Value {
         user_attr: &Attributions,
         object_attr: &Attributions,
         env_attr: &Attributions,
-    ) -> Result<NonZeroU32> {
+    ) -> Option<NonZeroU32> {
         match self {
-            Value::UserAttr(identifier) => user_attr.get(*identifier).ok_or(EINVAL),
-            Value::ObjectAttr(identifier) => object_attr.get(*identifier).ok_or(EINVAL),
-            Value::EnvAttr(identifier) => env_attr.get(*identifier).ok_or(EINVAL),
-            Value::Constant(x) => Ok(*x),
+            Value::UserAttr(identifier) => user_attr.get(*identifier),
+            Value::ObjectAttr(identifier) => object_attr.get(*identifier),
+            Value::EnvAttr(identifier) => env_attr.get(*identifier),
+            Value::Constant(x) => Some(*x),
         }
     }
 }
