@@ -1,7 +1,7 @@
-use crate::raw::{
+use crate::hash::raw::{
     Allocator, Bucket, Global, RawDrain, RawExtractIf, RawIntoIter, RawIter, RawTable,
 };
-use crate::{DefaultHashBuilder, Equivalent, TryReserveError};
+use crate::hash::{DefaultHashBuilder, Equivalent, TryReserveError};
 use core::borrow::Borrow;
 use core::fmt::{self, Debug};
 use core::hash::{BuildHasher, Hash};
@@ -11,7 +11,7 @@ use core::mem;
 use core::ops::Index;
 
 #[cfg(feature = "raw-entry")]
-pub use crate::raw_entry::*;
+pub use crate::hash::raw_entry::*;
 
 /// A hash map implemented with quadratic probing and SIMD lookup.
 ///
@@ -1803,7 +1803,7 @@ where
         &mut self,
         hash: u64,
         key: &Q,
-    ) -> Result<Bucket<(K, V)>, crate::raw::InsertSlot>
+    ) -> Result<Bucket<(K, V)>, crate::hash::raw::InsertSlot>
     where
         Q: Equivalent<K> + ?Sized,
     {
@@ -5927,7 +5927,7 @@ mod test_map {
     #[test]
     #[cfg_attr(miri, ignore)] // FIXME: no OOM signalling (https://github.com/rust-lang/miri/issues/613)
     fn test_try_reserve() {
-        use crate::TryReserveError::{AllocError, CapacityOverflow};
+        use crate::hash::TryReserveError::{AllocError, CapacityOverflow};
 
         const MAX_ISIZE: usize = isize::MAX as usize;
 
@@ -6224,7 +6224,7 @@ mod test_map {
         A: Allocator,
         T: PartialEq + core::fmt::Debug,
     {
-        use crate::scopeguard::guard;
+        use crate::hash::scopeguard::guard;
 
         let mut map: HashMap<u64, CheckedCloneDrop<T>, _, A> =
             HashMap::with_capacity_in(iter.size_hint().0, alloc);

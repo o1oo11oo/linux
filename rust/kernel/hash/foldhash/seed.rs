@@ -2,7 +2,7 @@ use core::hash::BuildHasher;
 
 // These constants may end up unused depending on platform support.
 #[allow(unused)]
-use crate::{ARBITRARY1, ARBITRARY9};
+use crate::hash::foldhash::{ARBITRARY1, ARBITRARY9};
 
 use super::{
     folded_multiply, ARBITRARY2, ARBITRARY3, ARBITRARY4, ARBITRARY5, ARBITRARY6, ARBITRARY7,
@@ -14,7 +14,7 @@ const FIXED_GLOBAL_SEED: [u64; 4] = [ARBITRARY4, ARBITRARY5, ARBITRARY6, ARBITRA
 
 pub mod fast {
     use super::*;
-    use crate::fast::FoldHasher;
+    use crate::hash::foldhash::fast::FoldHasher;
 
     /// A [`BuildHasher`] for [`fast::FoldHasher`]s that are randomly initialized.
     #[derive(Copy, Clone, Debug)]
@@ -128,7 +128,7 @@ pub mod fast {
 
 pub mod quality {
     use super::*;
-    use crate::quality::FoldHasher;
+    use crate::hash::foldhash::quality::FoldHasher;
 
     /// A [`BuildHasher`] for [`quality::FoldHasher`]s that are randomly initialized.
     #[derive(Copy, Clone, Default, Debug)]

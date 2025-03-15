@@ -9,7 +9,6 @@
 //! [here]: https://github.com/abseil/abseil-cpp/blob/master/absl/container/internal/raw_hash_set.h
 //! [CppCon talk]: https://www.youtube.com/watch?v=ncHmEUmJZf4
 
-#![no_std]
 #![cfg_attr(
     feature = "nightly",
     feature(
@@ -31,26 +30,16 @@
     clippy::redundant_else,
     clippy::manual_map,
     clippy::missing_safety_doc,
-    clippy::missing_errors_doc
+    clippy::missing_errors_doc,
+    unreachable_pub,
+    unsafe_op_in_unsafe_fn
 )]
 #![warn(missing_docs)]
 #![warn(rust_2018_idioms)]
 #![cfg_attr(feature = "nightly", allow(internal_features))]
 
 /// Default hasher for [`HashMap`] and [`HashSet`].
-#[cfg(feature = "default-hasher")]
 pub type DefaultHashBuilder = foldhash::fast::RandomState;
-
-/// Dummy default hasher for [`HashMap`] and [`HashSet`].
-#[cfg(not(feature = "default-hasher"))]
-pub enum DefaultHashBuilder {}
-
-#[cfg(test)]
-#[macro_use]
-extern crate std;
-
-#[cfg_attr(test, macro_use)]
-extern crate alloc;
 
 #[cfg(feature = "nightly")]
 #[cfg(doctest)]
@@ -60,6 +49,8 @@ doc_comment::doctest!("../README.md");
 mod macros;
 
 mod raw;
+
+pub mod foldhash;
 
 mod external_trait_impls;
 mod map;
@@ -73,10 +64,10 @@ mod table;
 
 pub mod hash_map {
     //! A hash map implemented with quadratic probing and SIMD lookup.
-    pub use crate::map::*;
+    pub use crate::hash::map::*;
 
     #[cfg(feature = "rustc-internal-api")]
-    pub use crate::rustc_entry::*;
+    pub use crate::hash::rustc_entry::*;
 
     #[cfg(feature = "rayon")]
     /// [rayon]-based parallel iterator types for hash maps.
@@ -85,12 +76,12 @@ pub mod hash_map {
     ///
     /// [rayon]: https://docs.rs/rayon/1.0/rayon
     pub mod rayon {
-        pub use crate::external_trait_impls::rayon::map::*;
+        pub use crate::hash::external_trait_impls::rayon::map::*;
     }
 }
 pub mod hash_set {
     //! A hash set implemented as a `HashMap` where the value is `()`.
-    pub use crate::set::*;
+    pub use crate::hash::set::*;
 
     #[cfg(feature = "rayon")]
     /// [rayon]-based parallel iterator types for hash sets.
@@ -99,12 +90,12 @@ pub mod hash_set {
     ///
     /// [rayon]: https://docs.rs/rayon/1.0/rayon
     pub mod rayon {
-        pub use crate::external_trait_impls::rayon::set::*;
+        pub use crate::hash::external_trait_impls::rayon::set::*;
     }
 }
 pub mod hash_table {
     //! A hash table implemented with quadratic probing and SIMD lookup.
-    pub use crate::table::*;
+    pub use crate::hash::table::*;
 
     #[cfg(feature = "rayon")]
     /// [rayon]-based parallel iterator types for hash tables.
@@ -113,13 +104,13 @@ pub mod hash_table {
     ///
     /// [rayon]: https://docs.rs/rayon/1.0/rayon
     pub mod rayon {
-        pub use crate::external_trait_impls::rayon::table::*;
+        pub use crate::hash::external_trait_impls::rayon::table::*;
     }
 }
 
-pub use crate::map::HashMap;
-pub use crate::set::HashSet;
-pub use crate::table::HashTable;
+pub use crate::hash::map::HashMap;
+pub use crate::hash::set::HashSet;
+pub use crate::hash::table::HashTable;
 
 #[cfg(feature = "equivalent")]
 pub use equivalent::Equivalent;
@@ -170,6 +161,6 @@ pub enum TryReserveError {
     /// The memory allocator returned an error
     AllocError {
         /// The layout of the allocation request that failed.
-        layout: alloc::alloc::Layout,
+        layout: core::alloc::Layout,
     },
 }

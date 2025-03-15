@@ -11,14 +11,14 @@ mod size_hint {
 }
 
 mod map {
-    use crate::raw::Allocator;
+    use crate::hash::raw::Allocator;
     use core::fmt;
     use core::hash::{BuildHasher, Hash};
     use core::marker::PhantomData;
     use serde::de::{Deserialize, Deserializer, MapAccess, Visitor};
     use serde::ser::{Serialize, Serializer};
 
-    use crate::hash_map::HashMap;
+    use crate::hash::hash_map::HashMap;
 
     use super::size_hint;
 
@@ -97,14 +97,14 @@ mod map {
 }
 
 mod set {
-    use crate::raw::Allocator;
+    use crate::hash::raw::Allocator;
     use core::fmt;
     use core::hash::{BuildHasher, Hash};
     use core::marker::PhantomData;
     use serde::de::{Deserialize, Deserializer, SeqAccess, Visitor};
     use serde::ser::{Serialize, Serializer};
 
-    use crate::hash_set::HashSet;
+    use crate::hash::hash_set::HashSet;
 
     use super::size_hint;
 

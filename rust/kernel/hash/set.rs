@@ -1,4 +1,4 @@
-use crate::{Equivalent, TryReserveError};
+use crate::hash::{Equivalent, TryReserveError};
 use core::hash::{BuildHasher, Hash};
 use core::iter::{Chain, FusedIterator};
 use core::ops::{BitAnd, BitAndAssign, BitOr, BitOrAssign, BitXor, BitXorAssign, Sub, SubAssign};
@@ -6,8 +6,8 @@ use core::{fmt, mem};
 use map::make_hash;
 
 use super::map::{self, HashMap, Keys};
-use crate::raw::{Allocator, Global, RawExtractIf};
-use crate::DefaultHashBuilder;
+use crate::hash::raw::{Allocator, Global, RawExtractIf};
+use crate::hash::DefaultHashBuilder;
 
 // Future Optimization (FIXME!)
 // =============================
@@ -2577,7 +2577,7 @@ fn assert_covariance() {
 #[cfg(test)]
 mod test_set {
     use super::{make_hash, Equivalent, HashSet};
-    use crate::DefaultHashBuilder;
+    use crate::hash::DefaultHashBuilder;
     use std::vec::Vec;
 
     #[test]
@@ -2787,7 +2787,7 @@ mod test_set {
 
     #[test]
     fn test_from_map() {
-        let mut a = crate::HashMap::new();
+        let mut a = crate::hash::HashMap::new();
         a.insert(1, ());
         a.insert(2, ());
         a.insert(3, ());

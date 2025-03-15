@@ -1,6 +1,6 @@
 use core::{fmt, iter::FusedIterator, marker::PhantomData};
 
-use crate::{
+use crate::hash::{
     raw::{
         Allocator, Bucket, Global, InsertSlot, RawDrain, RawExtractIf, RawIntoIter, RawIter,
         RawIterHash, RawTable,

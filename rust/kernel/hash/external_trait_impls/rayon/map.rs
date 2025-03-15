@@ -1,8 +1,8 @@
 //! Rayon extensions for `HashMap`.
 
 use super::raw::{RawIntoParIter, RawParDrain, RawParIter};
-use crate::hash_map::HashMap;
-use crate::raw::{Allocator, Global};
+use crate::hash::hash_map::HashMap;
+use crate::hash::raw::{Allocator, Global};
 use core::fmt;
 use core::hash::{BuildHasher, Hash};
 use core::marker::PhantomData;
@@ -470,7 +470,7 @@ mod test_par_map {
 
     use rayon::prelude::*;
 
-    use crate::hash_map::HashMap;
+    use crate::hash::hash_map::HashMap;
 
     struct Droppable<'a> {
         k: usize,

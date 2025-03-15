@@ -10,7 +10,7 @@
 //!
 //! - You expect foldhash to have a consistent output across versions or
 //!   platforms, such as for persistent file formats or communication protocols.
-//!   
+//!
 //! - You are relying on foldhash's properties for any kind of security.
 //!   Foldhash is **not appropriate for any cryptographic purpose**.
 //!
@@ -82,7 +82,6 @@
 //! let hash = random_state.hash_one("hello world");
 //! ```
 
-#![cfg_attr(all(not(test), not(feature = "std")), no_std)]
 #![warn(missing_docs)]
 
 use core::hash::Hasher;

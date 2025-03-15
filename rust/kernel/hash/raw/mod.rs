@@ -1,6 +1,6 @@
-use crate::alloc::alloc::{handle_alloc_error, Layout};
-use crate::scopeguard::{guard, ScopeGuard};
-use crate::TryReserveError;
+use crate::hash::scopeguard::{guard, ScopeGuard};
+use crate::hash::TryReserveError;
+use core::alloc::Layout;
 use core::array;
 use core::iter::FusedIterator;
 use core::marker::PhantomData;
@@ -90,7 +90,7 @@ impl Fallibility {
     fn alloc_err(self, layout: Layout) -> TryReserveError {
         match self {
             Fallibility::Fallible => TryReserveError::AllocError { layout },
-            Fallibility::Infallible => handle_alloc_error(layout),
+            Fallibility::Infallible => panic!("Hash table allocation error"),
         }
     }
 }
@@ -349,12 +349,12 @@ impl<T> Bucket<T> {
     /// must be no greater than the number returned by the function
     /// [`RawTable::buckets`] or [`RawTableInner::buckets`].
     ///
-    /// [`Bucket`]: crate::raw::Bucket
+    /// [`Bucket`]: crate::hash::raw::Bucket
     /// [`<*mut T>::sub`]: https://doc.rust-lang.org/core/primitive.pointer.html#method.sub-1
     /// [`NonNull::new_unchecked`]: https://doc.rust-lang.org/stable/std/ptr/struct.NonNull.html#method.new_unchecked
-    /// [`RawTable::data_end`]: crate::raw::RawTable::data_end
+    /// [`RawTable::data_end`]: crate::hash::raw::RawTable::data_end
     /// [`RawTableInner::data_end<T>`]: RawTableInner::data_end<T>
-    /// [`RawTable::buckets`]: crate::raw::RawTable::buckets
+    /// [`RawTable::buckets`]: crate::hash::raw::RawTable::buckets
     /// [`RawTableInner::buckets`]: RawTableInner::buckets
     #[inline]
     unsafe fn from_base_index(base: NonNull<T>, index: usize) -> Self {
@@ -422,11 +422,11 @@ impl<T> Bucket<T> {
     ///
     /// If `mem::size_of::<T>() == 0`, this function is always safe.
     ///
-    /// [`Bucket`]: crate::raw::Bucket
-    /// [`from_base_index`]: crate::raw::Bucket::from_base_index
-    /// [`RawTable::data_end`]: crate::raw::RawTable::data_end
+    /// [`Bucket`]: crate::hash::raw::Bucket
+    /// [`from_base_index`]: crate::hash::raw::Bucket::from_base_index
+    /// [`RawTable::data_end`]: crate::hash::raw::RawTable::data_end
     /// [`RawTableInner::data_end<T>`]: RawTableInner::data_end<T>
-    /// [`RawTable`]: crate::raw::RawTable
+    /// [`RawTable`]: crate::hash::raw::RawTable
     /// [`RawTableInner`]: RawTableInner
     /// [`<*const T>::offset_from`]: https://doc.rust-lang.org/nightly/core/primitive.pointer.html#method.offset_from
     #[inline]
@@ -475,7 +475,7 @@ impl<T> Bucket<T> {
     /// will not re-evaluate where the new value should go, meaning the value may become
     /// "lost" if their location does not reflect their state.
     ///
-    /// [`RawTable`]: crate::raw::RawTable
+    /// [`RawTable`]: crate::hash::raw::RawTable
     /// [`<*mut T>::drop_in_place`]: https://doc.rust-lang.org/core/primitive.pointer.html#method.drop_in_place
     /// [`Hash`]: https://doc.rust-lang.org/core/hash/trait.Hash.html
     /// [`Eq`]: https://doc.rust-lang.org/core/cmp/trait.Eq.html
@@ -529,10 +529,10 @@ impl<T> Bucket<T> {
     /// `self.to_base_index() + offset + 1` must be no greater than the number returned by the
     /// function [`RawTable::buckets`] or [`RawTableInner::buckets`].
     ///
-    /// [`Bucket`]: crate::raw::Bucket
+    /// [`Bucket`]: crate::hash::raw::Bucket
     /// [`<*mut T>::sub`]: https://doc.rust-lang.org/core/primitive.pointer.html#method.sub-1
     /// [`NonNull::new_unchecked`]: https://doc.rust-lang.org/stable/std/ptr/struct.NonNull.html#method.new_unchecked
-    /// [`RawTable::buckets`]: crate::raw::RawTable::buckets
+    /// [`RawTable::buckets`]: crate::hash::raw::RawTable::buckets
     /// [`RawTableInner::buckets`]: RawTableInner::buckets
     #[inline]
     unsafe fn next_n(&self, offset: usize) -> Self {
@@ -560,8 +560,8 @@ impl<T> Bucket<T> {
     /// double drop when [`RawTable`] goes out of scope.
     ///
     /// [`ptr::drop_in_place`]: https://doc.rust-lang.org/core/ptr/fn.drop_in_place.html
-    /// [`RawTable`]: crate::raw::RawTable
-    /// [`RawTable::erase`]: crate::raw::RawTable::erase
+    /// [`RawTable`]: crate::hash::raw::RawTable
+    /// [`RawTable::erase`]: crate::hash::raw::RawTable::erase
     #[cfg_attr(feature = "inline-more", inline)]
     pub(crate) unsafe fn drop(&self) {
         self.as_ptr().drop_in_place();
@@ -581,8 +581,8 @@ impl<T> Bucket<T> {
     /// because of not erased `data control byte`.
     ///
     /// [`ptr::read`]: https://doc.rust-lang.org/core/ptr/fn.read.html
-    /// [`RawTable`]: crate::raw::RawTable
-    /// [`RawTable::remove`]: crate::raw::RawTable::remove
+    /// [`RawTable`]: crate::hash::raw::RawTable
+    /// [`RawTable::remove`]: crate::hash::raw::RawTable::remove
     #[inline]
     pub(crate) unsafe fn read(&self) -> T {
         self.as_ptr().read()
@@ -1523,7 +1523,7 @@ impl RawTableInner {
     /// [`Allocator`]: https://doc.rust-lang.org/alloc/alloc/trait.Allocator.html
     #[cfg_attr(feature = "inline-more", inline)]
     unsafe fn new_uninitialized<A>(
-        alloc: &A,
+        _alloc: &A,
         table_layout: TableLayout,
         buckets: usize,
         fallibility: Fallibility,
@@ -1539,7 +1539,7 @@ impl RawTableInner {
             None => return Err(fallibility.capacity_overflow()),
         };
 
-        let ptr: NonNull<u8> = match do_alloc(alloc, layout) {
+        let ptr: NonNull<u8> = match do_alloc::<A>(layout) {
             Ok(block) => block.cast(),
             Err(_) => return Err(fallibility.alloc_err(layout)),
         };
@@ -2632,7 +2632,10 @@ impl RawTableInner {
         table_layout: TableLayout,
         capacity: usize,
         fallibility: Fallibility,
-    ) -> Result<crate::scopeguard::ScopeGuard<Self, impl FnMut(&mut Self) + 'a>, TryReserveError>
+    ) -> Result<
+        crate::hash::scopeguard::ScopeGuard<Self, impl FnMut(&mut Self) + 'a>,
+        TryReserveError,
+    >
     where
         A: Allocator,
     {
@@ -3032,14 +3035,14 @@ impl RawTableInner {
     /// [`GlobalAlloc::dealloc`]: https://doc.rust-lang.org/alloc/alloc/trait.GlobalAlloc.html#tymethod.dealloc
     /// [`Allocator::deallocate`]: https://doc.rust-lang.org/alloc/alloc/trait.Allocator.html#tymethod.deallocate
     #[inline]
-    unsafe fn free_buckets<A>(&mut self, alloc: &A, table_layout: TableLayout)
+    unsafe fn free_buckets<A>(&mut self, _alloc: &A, table_layout: TableLayout)
     where
         A: Allocator,
     {
         // SAFETY: The caller must uphold the safety contract for `free_buckets`
         // method.
         let (ptr, layout) = self.allocation_info(table_layout);
-        alloc.deallocate(ptr, layout);
+        A::free(ptr, layout);
     }
 
     /// Returns a pointer to the allocated memory and the layout that was used to
@@ -3959,8 +3962,8 @@ impl<T, A: Allocator> Drop for RawIntoIter<T, A> {
             self.iter.drop_elements();
 
             // Free the table
-            if let Some((ptr, layout, ref alloc)) = self.allocation {
-                alloc.deallocate(ptr, layout);
+            if let Some((ptr, layout, ref _alloc)) = self.allocation {
+                A::free(ptr, layout);
             }
         }
     }
