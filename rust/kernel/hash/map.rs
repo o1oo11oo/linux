@@ -258,7 +258,6 @@ where
     hash_builder.hash_one(val)
 }
 
-#[cfg(feature = "default-hasher")]
 impl<K, V> HashMap<K, V, DefaultHashBuilder> {
     /// Creates an empty `HashMap`.
     ///
@@ -321,7 +320,6 @@ impl<K, V> HashMap<K, V, DefaultHashBuilder> {
     }
 }
 
-#[cfg(feature = "default-hasher")]
 impl<K, V, A: Allocator> HashMap<K, V, DefaultHashBuilder, A> {
     /// Creates an empty `HashMap` using the given allocator.
     ///
@@ -2102,7 +2100,6 @@ where
 }
 
 // The default hasher is used to match the std implementation signature
-#[cfg(feature = "default-hasher")]
 impl<K, V, A, const N: usize> From<[(K, V); N]> for HashMap<K, V, DefaultHashBuilder, A>
 where
     K: Eq + Hash,

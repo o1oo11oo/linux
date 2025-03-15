@@ -127,7 +127,6 @@ impl<T: Clone, S: Clone, A: Allocator + Clone> Clone for HashSet<T, S, A> {
     }
 }
 
-#[cfg(feature = "default-hasher")]
 impl<T> HashSet<T, DefaultHashBuilder> {
     /// Creates an empty `HashSet`.
     ///
@@ -191,7 +190,6 @@ impl<T> HashSet<T, DefaultHashBuilder> {
     }
 }
 
-#[cfg(feature = "default-hasher")]
 impl<T: Hash + Eq, A: Allocator> HashSet<T, DefaultHashBuilder, A> {
     /// Creates an empty `HashSet`.
     ///
@@ -1275,7 +1273,6 @@ where
 }
 
 // The default hasher is used to match the std implementation signature
-#[cfg(feature = "default-hasher")]
 impl<T, A, const N: usize> From<[T; N]> for HashSet<T, DefaultHashBuilder, A>
 where
     T: Eq + Hash,

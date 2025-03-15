@@ -23,6 +23,7 @@ use crate::pr_warn;
 /// supports larger allocations up to `bindings::KMALLOC_MAX_SIZE`, which is hardware specific.
 ///
 /// For more details see [self].
+#[derive(Default)]
 pub struct Kmalloc;
 
 /// The virtually contiguous kernel allocator.
@@ -32,6 +33,7 @@ pub struct Kmalloc;
 /// allocator is not physically contiguous.
 ///
 /// For more details see [self].
+#[derive(Default)]
 pub struct Vmalloc;
 
 /// The kvmalloc kernel allocator.
@@ -41,6 +43,7 @@ pub struct Vmalloc;
 /// known and may exceed the capabilities of `Kmalloc`.
 ///
 /// For more details see [self].
+#[derive(Default)]
 pub struct KVmalloc;
 
 /// Returns a proper size to alloc a new object aligned to `new_layout`'s alignment.
