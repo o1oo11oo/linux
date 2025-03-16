@@ -393,8 +393,13 @@ impl Attributions {
         self.map.get(identifier).copied().flatten()
     }
 
-    pub(crate) fn set(&mut self, identifier: usize, value: Option<NonZeroU32>) -> Result<()> {
-        self.ensure_length(identifier)?;
+    pub(crate) fn set(
+        &mut self,
+        identifier: usize,
+        value: Option<NonZeroU32>,
+        flags: Flags,
+    ) -> Result<()> {
+        self.ensure_length(identifier, flags)?;
 
         let entry = self.map.get_mut(identifier).ok_or(EINVAL)?;
         *entry = value;
@@ -402,17 +407,20 @@ impl Attributions {
         Ok(())
     }
 
-    pub(crate) fn add(&mut self, identifier: usize, value: NonZeroU32) -> Result<()> {
-        self.set(identifier, Some(value))
+    pub(crate) fn add(&mut self, identifier: usize, value: NonZeroU32, flags: Flags) -> Result<()> {
+        self.set(identifier, Some(value), flags)
     }
 
-    pub(crate) fn remove(&mut self, identifier: usize) -> Result<()> {
-        self.set(identifier, None)
+    pub(crate) fn remove(&mut self, identifier: usize, flags: Flags) -> Result<()> {
+        self.set(identifier, None, flags)
     }
 
-    fn ensure_length(&mut self, index: usize) -> Result<()> {
+    // Since this might be called from within an RCU read critical section,
+    // allow specifying the flags when it is used instead of just using
+    // GFP_KERNEL by default.
+    fn ensure_length(&mut self, index: usize, flags: Flags) -> Result<()> {
         for _ in self.map.len()..=index {
-            self.map.push(None, GFP_KERNEL)?
+            self.map.push(None, flags)?
         }
 
         Ok(())

@@ -124,7 +124,7 @@ pub(crate) fn add_user_attribution(
     flags: Flags,
 ) -> Result<()> {
     let entry = user_attr.get_mut(uid, flags)?;
-    entry.add(identifier, value)
+    entry.add(identifier, value, flags)
 }
 
 pub(crate) fn remove_user_attribution(
@@ -134,7 +134,7 @@ pub(crate) fn remove_user_attribution(
     flags: Flags,
 ) -> Result<()> {
     let entry = user_attr.get_mut(uid, flags)?;
-    entry.remove(identifier)
+    entry.remove(identifier, flags)
 }
 
 pub(crate) fn add_object_attribution(
@@ -145,7 +145,7 @@ pub(crate) fn add_object_attribution(
     flags: Flags,
 ) -> Result<()> {
     let entry = object_attr.get_mut(inode, flags)?;
-    entry.add(identifier, value)
+    entry.add(identifier, value, flags)
 }
 
 pub(crate) fn remove_object_attribution(
@@ -155,5 +155,5 @@ pub(crate) fn remove_object_attribution(
     flags: Flags,
 ) -> Result<()> {
     let entry = object_attr.get_mut(inode, flags)?;
-    entry.remove(identifier)
+    entry.remove(identifier, flags)
 }
