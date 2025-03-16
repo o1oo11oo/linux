@@ -295,9 +295,8 @@ impl<K, V> HashMap<K, V, DefaultHashBuilder> {
     ///
     /// # Safety
     ///
-    /// Before the HashMap gets used the hash builder needs to be replaced with
-    /// a properly seeded instance using the [`initialize`](Self::initialize)
-    /// function.
+    /// Before the HashMap gets used, the hash builder needs to be replaced with
+    /// a properly seeded instance using the [`reset`](Self::reset) function.
     pub const unsafe fn new_uninitialized() -> Self {
         Self::with_hasher_in(DefaultHashBuilder::new_uninitialized(), Kmalloc)
     }
@@ -308,7 +307,7 @@ impl<K, V> HashMap<K, V, DefaultHashBuilder> {
     /// using [`new_uninitialized`](Self::new_uninitialized).
     ///
     /// This is safe since it just resets the HashMap to a new one.
-    pub fn initialize(&mut self) {
+    pub fn reset(&mut self) {
         let mut properly_initialized = Self::new();
         mem::swap(self, &mut properly_initialized);
     }
@@ -339,8 +338,8 @@ impl<K, V> HashMap<K, V, DefaultHashBuilder> {
     /// assert!(map.capacity() >= 10);
     /// ```
     #[cfg_attr(feature = "inline-more", inline)]
-    pub fn with_capacity(capacity: usize) -> Self {
-        Self::with_capacity_and_hasher(capacity, DefaultHashBuilder::default())
+    pub fn with_capacity(capacity: usize, flags: Flags) -> Self {
+        Self::with_capacity_and_hasher(capacity, DefaultHashBuilder::default(), flags)
     }
 }
 
@@ -398,6 +397,17 @@ impl<K, V, A: Allocator> HashMap<K, V, DefaultHashBuilder, A> {
     /// function.
     pub const unsafe fn new_uninitialized_in(alloc: A) -> Self {
         Self::with_hasher_in(DefaultHashBuilder::new_uninitialized(), alloc)
+    }
+
+    /// Initialize/reset the HasHMap.
+    ///
+    /// Needs to be used after a non-properly initialized instance was created
+    /// using [`new_uninitialized`](Self::new_uninitialized).
+    ///
+    /// This is safe since it just resets the HashMap to a new one.
+    pub fn reset_in(&mut self, alloc: A) {
+        let mut properly_initialized = Self::new_in(alloc);
+        mem::swap(self, &mut properly_initialized);
     }
 
     /// Creates an empty `HashMap` with the specified capacity using the given allocator.
@@ -840,12 +850,6 @@ impl<K, V, S, A: Allocator> HashMap<K, V, S, A> {
                 marker: PhantomData,
             }
         }
-    }
-
-    #[cfg(test)]
-    #[cfg_attr(feature = "inline-more", inline)]
-    fn raw_capacity(&self) -> usize {
-        self.table.buckets()
     }
 
     /// Returns the number of elements in the map.
