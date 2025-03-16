@@ -7,6 +7,7 @@
 use kernel::{
     bindings, c_str,
     fs::File,
+    hash::HashMap,
     prelude::*,
     sync::{
         global_lock,
@@ -27,13 +28,24 @@ global_lock! {
     unsafe(uninit) static POLICY_WRITE_GUARD: Mutex<()> = ();
 }
 
+global_lock! {
+    // SAFETY: Initialized in module initializer before first use.
+    unsafe(uninit) static CACHE: Mutex<HashMap<(usize, usize, usize), bool>> = unsafe { HashMap::new_uninitialized() };
+}
+
 static POLICY: ProjectableGlobalLockedBy<Rcu<KBox<Policy>>, POLICY_WRITE_GUARD> =
     ProjectableGlobalLockedBy::new(Rcu::null());
 
 /// Initialize the PDP during LSM initialization
 pub(crate) fn init() -> Result<()> {
-    // SAFETY: Called exactly once.
-    unsafe { POLICY_WRITE_GUARD.init() };
+    // SAFETY: All initializers are called exactly once.
+    unsafe {
+        POLICY_WRITE_GUARD.init();
+        CACHE.init();
+    };
+
+    // Properly initialize the HashMap by resetting it
+    CACHE.lock().reset();
 
     // The attributes are encoded because it is simpler to work with
     // (implementing Copy means they use no lifetimes) and can be used for
@@ -105,6 +117,16 @@ pub(crate) fn file_permission(file: &File, mask: i32) -> Result<bool> {
 ///
 /// If a rule matches, its post-condition is executed by the EPP, if one exists.
 fn resolve(operation: usize, uid: usize, object: usize) -> Result<bool> {
+    // Check the cache for quick policy resolution first, keep it locked because
+    // of post-conditions
+    let mut cache_guard = CACHE.lock();
+    let cache = &mut *cache_guard;
+    pr_info!("Current cache: {cache:?}");
+    if let Some(&resolution) = cache.get(&(operation, uid, object)) {
+        pr_info!("Resolving request using cached resolution: {resolution}");
+        return Ok(resolution);
+    }
+
     // Get locks for the attribute stores before entering RCU read critical
     // section as to not block during it
     let mut user_attr_guard = pip::USER_ATTRIBUTES.lock();
@@ -142,18 +164,21 @@ fn resolve(operation: usize, uid: usize, object: usize) -> Result<bool> {
 
     // Get the rules for this operation, if it is a valid one
     let rules = policy.get(operation).ok_or(EINVAL)?;
-    let mut res = false;
+    let mut resolution = false;
 
+    // Check all rules if they allow access and collect all post-conditions for
+    // the ones evaluating to true to execute them after all rules were checked
     for rule in rules {
         if rule.pre.evaluate(user_attr, object_attr, env_attr) {
-            res = true;
+            resolution = true;
             if !rule.post.changes.is_empty() {
                 post_conditions.push(&rule.post, GFP_NOWAIT)?;
             }
         }
     }
 
-    for post in post_conditions {
+    // Execute all the post-conditions if there are any
+    for post in &post_conditions {
         epp::execute_postcondition(
             post,
             &mut user_attr_guard,
@@ -162,7 +187,16 @@ fn resolve(operation: usize, uid: usize, object: usize) -> Result<bool> {
         )?;
     }
 
-    Ok(res)
+    // If post-conditions were executed we need to reset the cache
+    if !post_conditions.is_empty() {
+        cache.reset();
+        pr_info!("Resetting cache because post-conditions were executed");
+    }
+
+    // Add this resolution to the cache
+    cache.insert_resize_if_needed((operation, uid, object), resolution, GFP_NOWAIT)?;
+
+    Ok(resolution)
 }
 
 fn is_protected(name: &CStr) -> bool {
