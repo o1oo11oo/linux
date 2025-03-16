@@ -23,6 +23,25 @@ pub mod fast {
         global_seed: global::GlobalSeed,
     }
 
+    impl RandomState {
+        /// Create an instance usable in const contexts.
+        ///
+        /// # Safety
+        ///
+        /// This needs to be replaced with a properly seeded instance before the
+        /// state gets used, otherwise everything will use the same seed.
+        pub const unsafe fn new_uninitialized() -> Self {
+            let per_hasher_seed = 0;
+
+            Self {
+                per_hasher_seed,
+                global_seed: global::GlobalSeed {
+                    _no_accidental_unsafe_init: (),
+                },
+            }
+        }
+    }
+
     impl Default for RandomState {
         fn default() -> Self {
             // We initialize the per-hasher seed with the stack pointer to ensure
@@ -269,7 +288,7 @@ mod global {
     #[derive(Copy, Clone, Debug)]
     pub struct GlobalSeed {
         // So we can't accidentally type GlobalSeed { } within this crate.
-        _no_accidental_unsafe_init: (),
+        pub(super) _no_accidental_unsafe_init: (),
     }
 
     impl GlobalSeed {

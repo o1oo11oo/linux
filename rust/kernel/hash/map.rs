@@ -1,3 +1,4 @@
+use crate::alloc::allocator::Kmalloc;
 use crate::hash::raw::{
     Allocator, Bucket, Global, RawDrain, RawExtractIf, RawIntoIter, RawIter, RawTable,
 };
@@ -289,6 +290,28 @@ impl<K, V> HashMap<K, V, DefaultHashBuilder> {
         Self::default()
     }
 
+    /// Create an uninitialized instance in a const context
+    ///
+    /// # Safety
+    ///
+    /// Before the HashMap gets used the hash builder needs to be replaced with
+    /// a properly seeded instance using the [`initialize`](Self::initialize)
+    /// function.
+    pub const unsafe fn new_uninitialized() -> Self {
+        Self::with_hasher_in(DefaultHashBuilder::new_uninitialized(), Kmalloc)
+    }
+
+    /// Initialize/reset the HasHMap.
+    ///
+    /// Needs to be used after a non-properly initialized instance was created
+    /// using [`new_uninitialized`](Self::new_uninitialized).
+    ///
+    /// This is safe since it just resets the HashMap to a new one.
+    pub fn initialize(&mut self) {
+        let mut properly_initialized = Self::new();
+        mem::swap(self, &mut properly_initialized);
+    }
+
     /// Creates an empty `HashMap` with the specified capacity.
     ///
     /// The hash map will be able to hold at least `capacity` elements without
@@ -363,6 +386,17 @@ impl<K, V, A: Allocator> HashMap<K, V, DefaultHashBuilder, A> {
     #[cfg_attr(feature = "inline-more", inline)]
     pub fn new_in(alloc: A) -> Self {
         Self::with_hasher_in(DefaultHashBuilder::default(), alloc)
+    }
+
+    /// Create an uninitialized instance in a const context
+    ///
+    /// # Safety
+    ///
+    /// Before the HashMap gets used the hash builder needs to be replaced with
+    /// a properly seeded instance using the [`initialize`](Self::initialize)
+    /// function.
+    pub const unsafe fn new_uninitialized_in(alloc: A) -> Self {
+        Self::with_hasher_in(DefaultHashBuilder::new_uninitialized(), alloc)
     }
 
     /// Creates an empty `HashMap` with the specified capacity using the given allocator.

@@ -5,8 +5,8 @@
 //! C header: [`include/uapi/asm-generic/errno-base.h`](srctree/include/uapi/asm-generic/errno-base.h)
 
 use crate::{
-    alloc::{layout::LayoutError, AllocError, Allocator},
-    hash::hash_map::OccupiedError,
+    alloc::{layout::LayoutError, AllocError},
+    hash::TryReserveError,
     str::CStr,
 };
 
@@ -208,8 +208,8 @@ impl From<TryFromIntError> for Error {
     }
 }
 
-impl<'a, K, V, S, A: Allocator> From<OccupiedError<'a, K, V, S, A>> for Error {
-    fn from(_: OccupiedError<'a, K, V, S, A>) -> Error {
+impl From<TryReserveError> for Error {
+    fn from(_: TryReserveError) -> Error {
         code::ENOMEM
     }
 }
