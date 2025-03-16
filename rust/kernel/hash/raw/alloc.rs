@@ -7,9 +7,12 @@ mod inner {
 
     use kernel::prelude::*;
 
-    pub(crate) use crate::alloc::{allocator::Kmalloc as Global, AllocError, Allocator};
+    pub(crate) use crate::alloc::{allocator::Kmalloc as Global, AllocError, Allocator, Flags};
 
-    pub(crate) fn do_alloc<A: Allocator>(layout: Layout) -> Result<NonNull<u8>, AllocError> {
-        A::alloc(layout, GFP_KERNEL).map(|ptr| ptr.cast())
+    pub(crate) fn do_alloc<A: Allocator>(
+        layout: Layout,
+        flags: Flags,
+    ) -> Result<NonNull<u8>, AllocError> {
+        A::alloc(layout, flags).map(|ptr| ptr.cast())
     }
 }

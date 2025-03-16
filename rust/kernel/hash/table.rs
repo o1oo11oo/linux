@@ -1,5 +1,6 @@
 use core::{fmt, iter::FusedIterator, marker::PhantomData};
 
+use crate::alloc::Flags;
 use crate::hash::{
     raw::{
         Allocator, Bucket, Global, InsertSlot, RawDrain, RawExtractIf, RawIntoIter, RawIter,
@@ -84,9 +85,9 @@ impl<T> HashTable<T, Global> {
     /// assert_eq!(table.len(), 0);
     /// assert!(table.capacity() >= 10);
     /// ```
-    pub fn with_capacity(capacity: usize) -> Self {
+    pub fn with_capacity(capacity: usize, flags: Flags) -> Self {
         Self {
-            raw: RawTable::with_capacity(capacity),
+            raw: RawTable::with_capacity(capacity, flags),
         }
     }
 }
@@ -180,9 +181,9 @@ where
     /// #     test()
     /// # }
     /// ```
-    pub fn with_capacity_in(capacity: usize, alloc: A) -> Self {
+    pub fn with_capacity_in(capacity: usize, alloc: A, flags: Flags) -> Self {
         Self {
-            raw: RawTable::with_capacity_in(capacity, alloc),
+            raw: RawTable::with_capacity_in(capacity, alloc, flags),
         }
     }
 
@@ -361,8 +362,9 @@ where
         hash: u64,
         eq: impl FnMut(&T) -> bool,
         hasher: impl Fn(&T) -> u64,
+        flags: Flags,
     ) -> Entry<'_, T, A> {
-        match self.raw.find_or_find_insert_slot(hash, eq, hasher) {
+        match self.raw.find_or_find_insert_slot(hash, eq, hasher, flags) {
             Ok(bucket) => Entry::Occupied(OccupiedEntry {
                 hash,
                 bucket,
@@ -406,8 +408,9 @@ where
         hash: u64,
         value: T,
         hasher: impl Fn(&T) -> u64,
+        flags: Flags,
     ) -> OccupiedEntry<'_, T, A> {
-        let bucket = self.raw.insert(hash, value, hasher);
+        let bucket = self.raw.insert(hash, value, hasher, flags);
         OccupiedEntry {
             hash,
             bucket,
@@ -470,8 +473,8 @@ where
     /// #     test()
     /// # }
     /// ```
-    pub fn shrink_to_fit(&mut self, hasher: impl Fn(&T) -> u64) {
-        self.raw.shrink_to(self.len(), hasher)
+    pub fn shrink_to_fit(&mut self, hasher: impl Fn(&T) -> u64, flags: Flags) {
+        self.raw.shrink_to(self.len(), hasher, flags)
     }
 
     /// Shrinks the capacity of the table with a lower limit. It will drop
@@ -508,8 +511,8 @@ where
     /// #     test()
     /// # }
     /// ```
-    pub fn shrink_to(&mut self, min_capacity: usize, hasher: impl Fn(&T) -> u64) {
-        self.raw.shrink_to(min_capacity, hasher);
+    pub fn shrink_to(&mut self, min_capacity: usize, hasher: impl Fn(&T) -> u64, flags: Flags) {
+        self.raw.shrink_to(min_capacity, hasher, flags);
     }
 
     /// Reserves capacity for at least `additional` more elements to be inserted
@@ -547,8 +550,8 @@ where
     /// #     test()
     /// # }
     /// ```
-    pub fn reserve(&mut self, additional: usize, hasher: impl Fn(&T) -> u64) {
-        self.raw.reserve(additional, hasher)
+    pub fn reserve(&mut self, additional: usize, hasher: impl Fn(&T) -> u64, flags: Flags) {
+        self.raw.reserve(additional, hasher, flags)
     }
 
     /// Tries to reserve capacity for at least `additional` more elements to be inserted
@@ -587,8 +590,9 @@ where
         &mut self,
         additional: usize,
         hasher: impl Fn(&T) -> u64,
+        flags: Flags,
     ) -> Result<(), TryReserveError> {
-        self.raw.try_reserve(additional, hasher)
+        self.raw.try_reserve(additional, hasher, flags)
     }
 
     /// Returns the number of elements the table can hold without reallocating.

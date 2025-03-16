@@ -1,4 +1,6 @@
+use crate::alloc::Flags;
 use crate::hash::{Equivalent, TryReserveError};
+use crate::prelude::GFP_KERNEL;
 use core::hash::{BuildHasher, Hash};
 use core::iter::{Chain, FusedIterator};
 use core::ops::{BitAnd, BitAndAssign, BitOr, BitOrAssign, BitXor, BitXorAssign, Sub, SubAssign};
@@ -183,9 +185,9 @@ impl<T> HashSet<T, DefaultHashBuilder> {
     /// assert!(set.capacity() >= 10);
     /// ```
     #[cfg_attr(feature = "inline-more", inline)]
-    pub fn with_capacity(capacity: usize) -> Self {
+    pub fn with_capacity(capacity: usize, flags: Flags) -> Self {
         Self {
-            map: HashMap::with_capacity(capacity),
+            map: HashMap::with_capacity(capacity, flags),
         }
     }
 }
@@ -246,9 +248,9 @@ impl<T: Hash + Eq, A: Allocator> HashSet<T, DefaultHashBuilder, A> {
     /// assert!(set.capacity() >= 10);
     /// ```
     #[cfg_attr(feature = "inline-more", inline)]
-    pub fn with_capacity_in(capacity: usize, alloc: A) -> Self {
+    pub fn with_capacity_in(capacity: usize, alloc: A, flags: Flags) -> Self {
         Self {
-            map: HashMap::with_capacity_in(capacity, alloc),
+            map: HashMap::with_capacity_in(capacity, alloc, flags),
         }
     }
 }
@@ -501,9 +503,9 @@ impl<T, S> HashSet<T, S, Global> {
     /// set.insert(1);
     /// ```
     #[cfg_attr(feature = "inline-more", inline)]
-    pub fn with_capacity_and_hasher(capacity: usize, hasher: S) -> Self {
+    pub fn with_capacity_and_hasher(capacity: usize, hasher: S, flags: Flags) -> Self {
         Self {
-            map: HashMap::with_capacity_and_hasher(capacity, hasher),
+            map: HashMap::with_capacity_and_hasher(capacity, hasher, flags),
         }
     }
 }
@@ -588,9 +590,9 @@ where
     /// set.insert(1);
     /// ```
     #[cfg_attr(feature = "inline-more", inline)]
-    pub fn with_capacity_and_hasher_in(capacity: usize, hasher: S, alloc: A) -> Self {
+    pub fn with_capacity_and_hasher_in(capacity: usize, hasher: S, alloc: A, flags: Flags) -> Self {
         Self {
-            map: HashMap::with_capacity_and_hasher_in(capacity, hasher, alloc),
+            map: HashMap::with_capacity_and_hasher_in(capacity, hasher, alloc, flags),
         }
     }
 
@@ -637,8 +639,8 @@ where
     /// set.try_reserve(10).expect("why is the test harness OOMing on 10 bytes?");
     /// ```
     #[cfg_attr(feature = "inline-more", inline)]
-    pub fn try_reserve(&mut self, additional: usize) -> Result<(), TryReserveError> {
-        self.map.try_reserve(additional)
+    pub fn try_reserve(&mut self, additional: usize, flags: Flags) -> Result<(), TryReserveError> {
+        self.map.try_reserve(additional, flags)
     }
 
     /// Shrinks the capacity of the set as much as possible. It will drop
@@ -658,8 +660,8 @@ where
     /// assert!(set.capacity() >= 2);
     /// ```
     #[cfg_attr(feature = "inline-more", inline)]
-    pub fn shrink_to_fit(&mut self) {
-        self.map.shrink_to_fit();
+    pub fn shrink_to_fit(&mut self, flags: Flags) {
+        self.map.shrink_to_fit(flags);
     }
 
     /// Shrinks the capacity of the set with a lower limit. It will drop
@@ -684,8 +686,8 @@ where
     /// assert!(set.capacity() >= 2);
     /// ```
     #[cfg_attr(feature = "inline-more", inline)]
-    pub fn shrink_to(&mut self, min_capacity: usize) {
-        self.map.shrink_to(min_capacity);
+    pub fn shrink_to(&mut self, min_capacity: usize, flags: Flags) {
+        self.map.shrink_to(min_capacity, flags);
     }
 
     /// Visits the values representing the difference,
@@ -881,9 +883,9 @@ where
     /// assert_eq!(set.len(), 4); // 100 was inserted
     /// ```
     #[cfg_attr(feature = "inline-more", inline)]
-    pub fn get_or_insert(&mut self, value: T) -> &T {
+    pub fn get_or_insert(&mut self, value: T, flags: Flags) -> &T {
         let hash = make_hash(&self.map.hash_builder, &value);
-        let bucket = match self.map.find_or_find_insert_slot(hash, &value) {
+        let bucket = match self.map.find_or_find_insert_slot(hash, &value, flags) {
             Ok(bucket) => bucket,
             Err(slot) => unsafe { self.map.table.insert_in_slot(hash, slot, (value, ())) },
         };
@@ -916,13 +918,13 @@ where
     /// set.get_or_insert_with("rust", |_| String::new());
     /// ```
     #[cfg_attr(feature = "inline-more", inline)]
-    pub fn get_or_insert_with<Q, F>(&mut self, value: &Q, f: F) -> &T
+    pub fn get_or_insert_with<Q, F>(&mut self, value: &Q, f: F, flags: Flags) -> &T
     where
         Q: Hash + Equivalent<T> + ?Sized,
         F: FnOnce(&Q) -> T,
     {
         let hash = make_hash(&self.map.hash_builder, value);
-        let bucket = match self.map.find_or_find_insert_slot(hash, value) {
+        let bucket = match self.map.find_or_find_insert_slot(hash, value, flags) {
             Ok(bucket) => bucket,
             Err(slot) => {
                 let new = f(value);
@@ -1059,8 +1061,8 @@ where
     /// assert_eq!(set.len(), 1);
     /// ```
     #[cfg_attr(feature = "inline-more", inline)]
-    pub(super) fn insert(&mut self, value: T) -> bool {
-        self.map.insert(value, ()).is_none()
+    pub(super) fn insert(&mut self, value: T, flags: Flags) -> bool {
+        self.map.insert(value, (), flags).is_none()
     }
 
     /// Adds a value to the set, resizing if needed.
@@ -1072,8 +1074,15 @@ where
     /// If the set did have this value present, `false` is returned.
     ///
     #[cfg_attr(feature = "inline-more", inline)]
-    pub fn insert_resize_if_needed(&mut self, value: T) -> Result<bool, TryReserveError> {
-        Ok(self.map.insert_resize_if_needed(value, ())?.is_none())
+    pub fn insert_resize_if_needed(
+        &mut self,
+        value: T,
+        flags: Flags,
+    ) -> Result<bool, TryReserveError> {
+        Ok(self
+            .map
+            .insert_resize_if_needed(value, (), flags)?
+            .is_none())
     }
 
     /// Insert a value the set without checking if the value already exists in the set.
@@ -1100,8 +1109,8 @@ where
     /// may be passed to unsafe code which does expect the set to behave
     /// correctly, and would cause unsoundness as a result.
     #[cfg_attr(feature = "inline-more", inline)]
-    pub unsafe fn insert_unique_unchecked(&mut self, value: T) -> &T {
-        self.map.insert_unique_unchecked(value, ()).0
+    pub unsafe fn insert_unique_unchecked(&mut self, value: T, flags: Flags) -> &T {
+        self.map.insert_unique_unchecked(value, (), flags).0
     }
 
     /// Adds a value to the set, replacing the existing value, if any, that is equal to the given
@@ -1120,9 +1129,9 @@ where
     /// assert_eq!(set.get(&[][..]).unwrap().capacity(), 10);
     /// ```
     #[cfg_attr(feature = "inline-more", inline)]
-    pub fn replace(&mut self, value: T) -> Option<T> {
+    pub fn replace(&mut self, value: T, flags: Flags) -> Option<T> {
         let hash = make_hash(&self.map.hash_builder, &value);
-        match self.map.find_or_find_insert_slot(hash, &value) {
+        match self.map.find_or_find_insert_slot(hash, &value, flags) {
             Ok(bucket) => Some(mem::replace(unsafe { &mut bucket.as_mut().0 }, value)),
             Err(slot) => {
                 unsafe {
@@ -1502,7 +1511,7 @@ where
     fn bitor_assign(&mut self, rhs: &HashSet<T, S, A>) {
         for item in rhs {
             if !self.contains(item) {
-                self.insert(item.clone());
+                self.insert(item.clone(), GFP_KERNEL);
             }
         }
     }
@@ -1568,7 +1577,7 @@ where
     fn bitxor_assign(&mut self, rhs: &HashSet<T, S, A>) {
         for item in rhs {
             let hash = make_hash(&self.map.hash_builder, item);
-            match self.map.find_or_find_insert_slot(hash, item) {
+            match self.map.find_or_find_insert_slot(hash, item, GFP_KERNEL) {
                 Ok(bucket) => unsafe {
                     self.map.table.remove(bucket);
                 },
@@ -2345,14 +2354,14 @@ impl<'a, T, S, A: Allocator> Entry<'a, T, S, A> {
     /// assert_eq!(entry.get(), &"horseyland");
     /// ```
     #[cfg_attr(feature = "inline-more", inline)]
-    pub fn insert(self) -> OccupiedEntry<'a, T, S, A>
+    pub fn insert(self, flags: Flags) -> OccupiedEntry<'a, T, S, A>
     where
         T: Hash,
         S: BuildHasher,
     {
         match self {
             Entry::Occupied(entry) => entry,
-            Entry::Vacant(entry) => entry.insert(),
+            Entry::Vacant(entry) => entry.insert(flags),
         }
     }
 
@@ -2375,13 +2384,13 @@ impl<'a, T, S, A: Allocator> Entry<'a, T, S, A> {
     /// assert_eq!(set.len(), 1);
     /// ```
     #[cfg_attr(feature = "inline-more", inline)]
-    pub fn or_insert(self)
+    pub fn or_insert(self, flags: Flags)
     where
         T: Hash,
         S: BuildHasher,
     {
         if let Entry::Vacant(entry) = self {
-            entry.insert();
+            entry.insert(flags);
         }
     }
 
@@ -2511,13 +2520,13 @@ impl<'a, T, S, A: Allocator> VacantEntry<'a, T, S, A> {
     /// assert!(set.contains("poneyland"));
     /// ```
     #[cfg_attr(feature = "inline-more", inline)]
-    pub fn insert(self) -> OccupiedEntry<'a, T, S, A>
+    pub fn insert(self, flags: Flags) -> OccupiedEntry<'a, T, S, A>
     where
         T: Hash,
         S: BuildHasher,
     {
         OccupiedEntry {
-            inner: self.inner.insert_entry(()),
+            inner: self.inner.insert_entry((), flags),
         }
     }
 }

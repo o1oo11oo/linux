@@ -1,8 +1,9 @@
-use crate::alloc::allocator::Kmalloc;
+use crate::alloc::{allocator::Kmalloc, Flags};
 use crate::hash::raw::{
     Allocator, Bucket, Global, RawDrain, RawExtractIf, RawIntoIter, RawIter, RawTable,
 };
 use crate::hash::{DefaultHashBuilder, Equivalent, TryReserveError};
+use crate::prelude::GFP_KERNEL;
 use core::borrow::Borrow;
 use core::fmt::{self, Debug};
 use core::hash::{BuildHasher, Hash};
@@ -444,8 +445,8 @@ impl<K, V, A: Allocator> HashMap<K, V, DefaultHashBuilder, A> {
     /// assert_eq!(map.capacity(), empty_map_capacity)
     /// ```
     #[cfg_attr(feature = "inline-more", inline)]
-    pub fn with_capacity_in(capacity: usize, alloc: A) -> Self {
-        Self::with_capacity_and_hasher_in(capacity, DefaultHashBuilder::default(), alloc)
+    pub fn with_capacity_in(capacity: usize, alloc: A, flags: Flags) -> Self {
+        Self::with_capacity_and_hasher_in(capacity, DefaultHashBuilder::default(), alloc, flags)
     }
 }
 
@@ -527,10 +528,10 @@ impl<K, V, S> HashMap<K, V, S> {
     /// map.insert(1, 2);
     /// ```
     #[cfg_attr(feature = "inline-more", inline)]
-    pub fn with_capacity_and_hasher(capacity: usize, hash_builder: S) -> Self {
+    pub fn with_capacity_and_hasher(capacity: usize, hash_builder: S, flags: Flags) -> Self {
         Self {
             hash_builder,
-            table: RawTable::with_capacity(capacity),
+            table: RawTable::with_capacity(capacity, flags),
         }
     }
 }
@@ -605,10 +606,15 @@ impl<K, V, S, A: Allocator> HashMap<K, V, S, A> {
     /// map.insert(1, 2);
     /// ```
     #[cfg_attr(feature = "inline-more", inline)]
-    pub fn with_capacity_and_hasher_in(capacity: usize, hash_builder: S, alloc: A) -> Self {
+    pub fn with_capacity_and_hasher_in(
+        capacity: usize,
+        hash_builder: S,
+        alloc: A,
+        flags: Flags,
+    ) -> Self {
         Self {
             hash_builder,
-            table: RawTable::with_capacity_in(capacity, alloc),
+            table: RawTable::with_capacity_in(capacity, alloc, flags),
         }
     }
 
@@ -1130,9 +1136,12 @@ where
     /// assert!(map.capacity() >= 10);
     /// ```
     #[cfg_attr(feature = "inline-more", inline)]
-    pub(super) fn reserve(&mut self, additional: usize) {
-        self.table
-            .reserve(additional, make_hasher::<_, V, S>(&self.hash_builder));
+    pub(super) fn reserve(&mut self, additional: usize, flags: Flags) {
+        self.table.reserve(
+            additional,
+            make_hasher::<_, V, S>(&self.hash_builder),
+            flags,
+        );
     }
 
     /// Tries to reserve capacity for at least `additional` more elements to be inserted
@@ -1180,9 +1189,12 @@ where
     /// # }
     /// ```
     #[cfg_attr(feature = "inline-more", inline)]
-    pub fn try_reserve(&mut self, additional: usize) -> Result<(), TryReserveError> {
-        self.table
-            .try_reserve(additional, make_hasher::<_, V, S>(&self.hash_builder))
+    pub fn try_reserve(&mut self, additional: usize, flags: Flags) -> Result<(), TryReserveError> {
+        self.table.try_reserve(
+            additional,
+            make_hasher::<_, V, S>(&self.hash_builder),
+            flags,
+        )
     }
 
     /// Shrinks the capacity of the map as much as possible. It will drop
@@ -1202,9 +1214,9 @@ where
     /// assert!(map.capacity() >= 2);
     /// ```
     #[cfg_attr(feature = "inline-more", inline)]
-    pub fn shrink_to_fit(&mut self) {
+    pub fn shrink_to_fit(&mut self, flags: Flags) {
         self.table
-            .shrink_to(0, make_hasher::<_, V, S>(&self.hash_builder));
+            .shrink_to(0, make_hasher::<_, V, S>(&self.hash_builder), flags);
     }
 
     /// Shrinks the capacity of the map with a lower limit. It will drop
@@ -1231,9 +1243,12 @@ where
     /// assert!(map.capacity() >= 2);
     /// ```
     #[cfg_attr(feature = "inline-more", inline)]
-    pub fn shrink_to(&mut self, min_capacity: usize) {
-        self.table
-            .shrink_to(min_capacity, make_hasher::<_, V, S>(&self.hash_builder));
+    pub fn shrink_to(&mut self, min_capacity: usize, flags: Flags) {
+        self.table.shrink_to(
+            min_capacity,
+            make_hasher::<_, V, S>(&self.hash_builder),
+            flags,
+        );
     }
 
     /// Gets the given key's corresponding entry in the map for in-place manipulation.
@@ -1817,9 +1832,9 @@ where
     /// assert_eq!(map[&37], "c");
     /// ```
     #[cfg_attr(feature = "inline-more", inline)]
-    pub(super) fn insert(&mut self, k: K, v: V) -> Option<V> {
+    pub(super) fn insert(&mut self, k: K, v: V, flags: Flags) -> Option<V> {
         let hash = make_hash::<K, S>(&self.hash_builder, &k);
-        match self.find_or_find_insert_slot(hash, &k) {
+        match self.find_or_find_insert_slot(hash, &k, flags) {
             Ok(bucket) => Some(mem::replace(unsafe { &mut bucket.as_mut().1 }, v)),
             Err(slot) => {
                 unsafe {
@@ -1845,12 +1860,17 @@ where
     /// [`std::collections`]: https://doc.rust-lang.org/std/collections/index.html
     /// [module-level documentation]: https://doc.rust-lang.org/std/collections/index.html#insert-and-complex-keys
     #[cfg_attr(feature = "inline-more", inline)]
-    pub fn insert_resize_if_needed(&mut self, k: K, v: V) -> Result<Option<V>, TryReserveError> {
+    pub fn insert_resize_if_needed(
+        &mut self,
+        k: K,
+        v: V,
+        flags: Flags,
+    ) -> Result<Option<V>, TryReserveError> {
         if self.len() == self.capacity() {
-            self.try_reserve(1)?;
+            self.try_reserve(1, flags)?;
         }
 
-        Ok(self.insert(k, v))
+        Ok(self.insert(k, v, flags))
     }
 
     /// Inserts a key-value pair into the map if there is capacity for it.
@@ -1868,11 +1888,11 @@ where
     /// [`std::collections`]: https://doc.rust-lang.org/std/collections/index.html
     /// [module-level documentation]: https://doc.rust-lang.org/std/collections/index.html#insert-and-complex-keys
     #[cfg_attr(feature = "inline-more", inline)]
-    pub fn insert_if_capacity(&mut self, k: K, v: V) -> Result<Option<V>, ()> {
+    pub fn insert_if_capacity(&mut self, k: K, v: V, flags: Flags) -> Result<Option<V>, ()> {
         if self.len() == self.capacity() {
             Err(())
         } else {
-            Ok(self.insert(k, v))
+            Ok(self.insert(k, v, flags))
         }
     }
 
@@ -1881,6 +1901,7 @@ where
         &mut self,
         hash: u64,
         key: &Q,
+        flags: Flags,
     ) -> Result<Bucket<(K, V)>, crate::hash::raw::InsertSlot>
     where
         Q: Equivalent<K> + ?Sized,
@@ -1889,6 +1910,7 @@ where
             hash,
             equivalent_key(key),
             make_hasher(&self.hash_builder),
+            flags,
         )
     }
 
@@ -1950,11 +1972,14 @@ where
     /// assert_eq!(map2.len(), 4);
     /// ```
     #[cfg_attr(feature = "inline-more", inline)]
-    pub unsafe fn insert_unique_unchecked(&mut self, k: K, v: V) -> (&K, &mut V) {
+    pub unsafe fn insert_unique_unchecked(&mut self, k: K, v: V, flags: Flags) -> (&K, &mut V) {
         let hash = make_hash::<K, S>(&self.hash_builder, &k);
-        let bucket = self
-            .table
-            .insert(hash, (k, v), make_hasher::<_, V, S>(&self.hash_builder));
+        let bucket = self.table.insert(
+            hash,
+            (k, v),
+            make_hasher::<_, V, S>(&self.hash_builder),
+            flags,
+        );
         let (k_ref, v_ref) = unsafe { bucket.as_mut() };
         (k_ref, v_ref)
     }
@@ -1992,10 +2017,11 @@ where
         &mut self,
         key: K,
         value: V,
+        flags: Flags,
     ) -> Result<&mut V, OccupiedError<'_, K, V, S, A>> {
         match self.entry(key) {
             Entry::Occupied(entry) => Err(OccupiedError { entry, value }),
-            Entry::Vacant(entry) => Ok(entry.insert(value)),
+            Entry::Vacant(entry) => Ok(entry.insert(value, flags)),
         }
     }
 
@@ -3558,7 +3584,7 @@ impl<'a, K, V, S, A: Allocator> Entry<'a, K, V, S, A> {
     /// assert_eq!(entry.key(), &"horseyland");
     /// ```
     #[cfg_attr(feature = "inline-more", inline)]
-    pub fn insert(self, value: V) -> OccupiedEntry<'a, K, V, S, A>
+    pub fn insert(self, value: V, flags: Flags) -> OccupiedEntry<'a, K, V, S, A>
     where
         K: Hash,
         S: BuildHasher,
@@ -3568,7 +3594,7 @@ impl<'a, K, V, S, A: Allocator> Entry<'a, K, V, S, A> {
                 entry.insert(value);
                 entry
             }
-            Entry::Vacant(entry) => entry.insert_entry(value),
+            Entry::Vacant(entry) => entry.insert_entry(value, flags),
         }
     }
 
@@ -3591,14 +3617,14 @@ impl<'a, K, V, S, A: Allocator> Entry<'a, K, V, S, A> {
     /// assert_eq!(map["poneyland"], 6);
     /// ```
     #[cfg_attr(feature = "inline-more", inline)]
-    pub fn or_insert(self, default: V) -> &'a mut V
+    pub fn or_insert(self, default: V, flags: Flags) -> &'a mut V
     where
         K: Hash,
         S: BuildHasher,
     {
         match self {
             Entry::Occupied(entry) => entry.into_mut(),
-            Entry::Vacant(entry) => entry.insert(default),
+            Entry::Vacant(entry) => entry.insert(default, flags),
         }
     }
 
@@ -3621,14 +3647,14 @@ impl<'a, K, V, S, A: Allocator> Entry<'a, K, V, S, A> {
     /// assert_eq!(map["poneyland"], 6);
     /// ```
     #[cfg_attr(feature = "inline-more", inline)]
-    pub fn or_insert_with<F: FnOnce() -> V>(self, default: F) -> &'a mut V
+    pub fn or_insert_with<F: FnOnce() -> V>(self, default: F, flags: Flags) -> &'a mut V
     where
         K: Hash,
         S: BuildHasher,
     {
         match self {
             Entry::Occupied(entry) => entry.into_mut(),
-            Entry::Vacant(entry) => entry.insert(default()),
+            Entry::Vacant(entry) => entry.insert(default(), flags),
         }
     }
 
@@ -3655,7 +3681,7 @@ impl<'a, K, V, S, A: Allocator> Entry<'a, K, V, S, A> {
     /// assert_eq!(map["poneyland"], 18);
     /// ```
     #[cfg_attr(feature = "inline-more", inline)]
-    pub fn or_insert_with_key<F: FnOnce(&K) -> V>(self, default: F) -> &'a mut V
+    pub fn or_insert_with_key<F: FnOnce(&K) -> V>(self, default: F, flags: Flags) -> &'a mut V
     where
         K: Hash,
         S: BuildHasher,
@@ -3664,7 +3690,7 @@ impl<'a, K, V, S, A: Allocator> Entry<'a, K, V, S, A> {
             Entry::Occupied(entry) => entry.into_mut(),
             Entry::Vacant(entry) => {
                 let value = default(entry.key());
-                entry.insert(value)
+                entry.insert(value, flags)
             }
         }
     }
@@ -3812,14 +3838,14 @@ impl<'a, K, V: Default, S, A: Allocator> Entry<'a, K, V, S, A> {
     /// assert_eq!(map.entry("horseland").or_default(), &mut Some(3));
     /// ```
     #[cfg_attr(feature = "inline-more", inline)]
-    pub fn or_default(self) -> &'a mut V
+    pub fn or_default(self, flags: Flags) -> &'a mut V
     where
         K: Hash,
         S: BuildHasher,
     {
         match self {
             Entry::Occupied(entry) => entry.into_mut(),
-            Entry::Vacant(entry) => entry.insert(Default::default()),
+            Entry::Vacant(entry) => entry.insert(Default::default(), flags),
         }
     }
 }
@@ -4141,7 +4167,7 @@ impl<'a, K, V, S, A: Allocator> VacantEntry<'a, K, V, S, A> {
     /// assert_eq!(map["poneyland"], 37);
     /// ```
     #[cfg_attr(feature = "inline-more", inline)]
-    pub fn insert(self, value: V) -> &'a mut V
+    pub fn insert(self, value: V, flags: Flags) -> &'a mut V
     where
         K: Hash,
         S: BuildHasher,
@@ -4151,6 +4177,7 @@ impl<'a, K, V, S, A: Allocator> VacantEntry<'a, K, V, S, A> {
             self.hash,
             (self.key, value),
             make_hasher::<_, V, S>(&self.table.hash_builder),
+            flags,
         );
         &mut entry.1
     }
@@ -4172,7 +4199,7 @@ impl<'a, K, V, S, A: Allocator> VacantEntry<'a, K, V, S, A> {
     /// }
     /// ```
     #[cfg_attr(feature = "inline-more", inline)]
-    pub fn insert_entry(self, value: V) -> OccupiedEntry<'a, K, V, S, A>
+    pub fn insert_entry(self, value: V, flags: Flags) -> OccupiedEntry<'a, K, V, S, A>
     where
         K: Hash,
         S: BuildHasher,
@@ -4181,6 +4208,7 @@ impl<'a, K, V, S, A: Allocator> VacantEntry<'a, K, V, S, A> {
             self.hash,
             (self.key, value),
             make_hasher::<_, V, S>(&self.table.hash_builder),
+            flags,
         );
         OccupiedEntry {
             hash: self.hash,
@@ -4204,7 +4232,7 @@ impl<'a, 'b, K, Q: ?Sized, V, S, A: Allocator> EntryRef<'a, 'b, K, Q, V, S, A> {
     /// assert_eq!(entry.key(), "horseyland");
     /// ```
     #[cfg_attr(feature = "inline-more", inline)]
-    pub fn insert(self, value: V) -> OccupiedEntry<'a, K, V, S, A>
+    pub fn insert(self, value: V, flags: Flags) -> OccupiedEntry<'a, K, V, S, A>
     where
         K: Hash + From<&'b Q>,
         S: BuildHasher,
@@ -4214,7 +4242,7 @@ impl<'a, 'b, K, Q: ?Sized, V, S, A: Allocator> EntryRef<'a, 'b, K, Q, V, S, A> {
                 entry.insert(value);
                 entry
             }
-            EntryRef::Vacant(entry) => entry.insert_entry(value),
+            EntryRef::Vacant(entry) => entry.insert_entry(value, flags),
         }
     }
 
@@ -4237,14 +4265,14 @@ impl<'a, 'b, K, Q: ?Sized, V, S, A: Allocator> EntryRef<'a, 'b, K, Q, V, S, A> {
     /// assert_eq!(map["poneyland"], 6);
     /// ```
     #[cfg_attr(feature = "inline-more", inline)]
-    pub fn or_insert(self, default: V) -> &'a mut V
+    pub fn or_insert(self, default: V, flags: Flags) -> &'a mut V
     where
         K: Hash + From<&'b Q>,
         S: BuildHasher,
     {
         match self {
             EntryRef::Occupied(entry) => entry.into_mut(),
-            EntryRef::Vacant(entry) => entry.insert(default),
+            EntryRef::Vacant(entry) => entry.insert(default, flags),
         }
     }
 
@@ -4267,14 +4295,14 @@ impl<'a, 'b, K, Q: ?Sized, V, S, A: Allocator> EntryRef<'a, 'b, K, Q, V, S, A> {
     /// assert_eq!(map["poneyland"], 6);
     /// ```
     #[cfg_attr(feature = "inline-more", inline)]
-    pub fn or_insert_with<F: FnOnce() -> V>(self, default: F) -> &'a mut V
+    pub fn or_insert_with<F: FnOnce() -> V>(self, default: F, flags: Flags) -> &'a mut V
     where
         K: Hash + From<&'b Q>,
         S: BuildHasher,
     {
         match self {
             EntryRef::Occupied(entry) => entry.into_mut(),
-            EntryRef::Vacant(entry) => entry.insert(default()),
+            EntryRef::Vacant(entry) => entry.insert(default(), flags),
         }
     }
 
@@ -4298,7 +4326,7 @@ impl<'a, 'b, K, Q: ?Sized, V, S, A: Allocator> EntryRef<'a, 'b, K, Q, V, S, A> {
     /// assert_eq!(map["poneyland"], 18);
     /// ```
     #[cfg_attr(feature = "inline-more", inline)]
-    pub fn or_insert_with_key<F: FnOnce(&Q) -> V>(self, default: F) -> &'a mut V
+    pub fn or_insert_with_key<F: FnOnce(&Q) -> V>(self, default: F, flags: Flags) -> &'a mut V
     where
         K: Hash + Borrow<Q> + From<&'b Q>,
         S: BuildHasher,
@@ -4307,7 +4335,7 @@ impl<'a, 'b, K, Q: ?Sized, V, S, A: Allocator> EntryRef<'a, 'b, K, Q, V, S, A> {
             EntryRef::Occupied(entry) => entry.into_mut(),
             EntryRef::Vacant(entry) => {
                 let value = default(entry.key);
-                entry.insert(value)
+                entry.insert(value, flags)
             }
         }
     }
@@ -4393,14 +4421,14 @@ impl<'a, 'b, K, Q: ?Sized, V: Default, S, A: Allocator> EntryRef<'a, 'b, K, Q, V
     /// assert_eq!(map.entry_ref("horseland").or_default(), &mut Some(3));
     /// ```
     #[cfg_attr(feature = "inline-more", inline)]
-    pub fn or_default(self) -> &'a mut V
+    pub fn or_default(self, flags: Flags) -> &'a mut V
     where
         K: Hash + From<&'b Q>,
         S: BuildHasher,
     {
         match self {
             EntryRef::Occupied(entry) => entry.into_mut(),
-            EntryRef::Vacant(entry) => entry.insert(Default::default()),
+            EntryRef::Vacant(entry) => entry.insert(Default::default(), flags),
         }
     }
 }
@@ -4441,7 +4469,7 @@ impl<'a, 'b, K, Q: ?Sized, V, S, A: Allocator> VacantEntryRef<'a, 'b, K, Q, V, S
     /// assert_eq!(map["poneyland"], 37);
     /// ```
     #[cfg_attr(feature = "inline-more", inline)]
-    pub fn insert(self, value: V) -> &'a mut V
+    pub fn insert(self, value: V, flags: Flags) -> &'a mut V
     where
         K: Hash + From<&'b Q>,
         S: BuildHasher,
@@ -4451,6 +4479,7 @@ impl<'a, 'b, K, Q: ?Sized, V, S, A: Allocator> VacantEntryRef<'a, 'b, K, Q, V, S
             self.hash,
             (self.key.into(), value),
             make_hasher::<_, V, S>(&self.table.hash_builder),
+            flags,
         );
         &mut entry.1
     }
@@ -4472,7 +4501,7 @@ impl<'a, 'b, K, Q: ?Sized, V, S, A: Allocator> VacantEntryRef<'a, 'b, K, Q, V, S
     /// }
     /// ```
     #[cfg_attr(feature = "inline-more", inline)]
-    pub fn insert_entry(self, value: V) -> OccupiedEntry<'a, K, V, S, A>
+    pub fn insert_entry(self, value: V, flags: Flags) -> OccupiedEntry<'a, K, V, S, A>
     where
         K: Hash + From<&'b Q>,
         S: BuildHasher,
@@ -4481,6 +4510,7 @@ impl<'a, 'b, K, Q: ?Sized, V, S, A: Allocator> VacantEntryRef<'a, 'b, K, Q, V, S
             self.hash,
             (self.key.into(), value),
             make_hasher::<_, V, S>(&self.table.hash_builder),
+            flags,
         );
         OccupiedEntry {
             hash: self.hash,
@@ -4499,10 +4529,14 @@ where
     #[cfg_attr(feature = "inline-more", inline)]
     fn from_iter<T: IntoIterator<Item = (K, V)>>(iter: T) -> Self {
         let iter = iter.into_iter();
-        let mut map =
-            Self::with_capacity_and_hasher_in(iter.size_hint().0, S::default(), A::default());
+        let mut map = Self::with_capacity_and_hasher_in(
+            iter.size_hint().0,
+            S::default(),
+            A::default(),
+            GFP_KERNEL,
+        );
         iter.for_each(|(k, v)| {
-            map.insert(k, v);
+            map.insert(k, v, GFP_KERNEL);
         });
         map
     }
@@ -4563,9 +4597,9 @@ where
         } else {
             (iter.size_hint().0 + 1) / 2
         };
-        self.reserve(reserve);
+        self.reserve(reserve, GFP_KERNEL);
         iter.for_each(move |(k, v)| {
-            self.insert(k, v);
+            self.insert(k, v, GFP_KERNEL);
         });
     }
 

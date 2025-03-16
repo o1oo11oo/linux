@@ -1,5 +1,7 @@
+use crate::alloc::Flags;
 use crate::hash::scopeguard::{guard, ScopeGuard};
 use crate::hash::TryReserveError;
+use crate::prelude::GFP_KERNEL;
 use core::alloc::Layout;
 use core::array;
 use core::iter::FusedIterator;
@@ -687,8 +689,8 @@ impl<T> RawTable<T, Global> {
 
     /// Allocates a new hash table with at least enough capacity for inserting
     /// the given number of elements without reallocating.
-    pub fn with_capacity(capacity: usize) -> Self {
-        Self::with_capacity_in(capacity, Global)
+    pub fn with_capacity(capacity: usize, flags: Flags) -> Self {
+        Self::with_capacity_in(capacity, Global, flags)
     }
 }
 
@@ -718,6 +720,7 @@ impl<T, A: Allocator> RawTable<T, A> {
         alloc: A,
         buckets: usize,
         fallibility: Fallibility,
+        flags: Flags,
     ) -> Result<Self, TryReserveError> {
         debug_assert!(buckets.is_power_of_two());
 
@@ -727,6 +730,7 @@ impl<T, A: Allocator> RawTable<T, A> {
                 Self::TABLE_LAYOUT,
                 buckets,
                 fallibility,
+                flags,
             )?,
             alloc,
             marker: PhantomData,
@@ -735,9 +739,9 @@ impl<T, A: Allocator> RawTable<T, A> {
 
     /// Allocates a new hash table using the given allocator, with at least enough capacity for
     /// inserting the given number of elements without reallocating.
-    pub fn with_capacity_in(capacity: usize, alloc: A) -> Self {
+    pub fn with_capacity_in(capacity: usize, alloc: A, flags: Flags) -> Self {
         Self {
-            table: RawTableInner::with_capacity(&alloc, Self::TABLE_LAYOUT, capacity),
+            table: RawTableInner::with_capacity(&alloc, Self::TABLE_LAYOUT, capacity, flags),
             alloc,
             marker: PhantomData,
         }
@@ -924,7 +928,7 @@ impl<T, A: Allocator> RawTable<T, A> {
 
     /// Shrinks the table to fit `max(self.len(), min_size)` elements.
     #[cfg_attr(feature = "inline-more", inline)]
-    pub fn shrink_to(&mut self, min_size: usize, hasher: impl Fn(&T) -> u64) {
+    pub fn shrink_to(&mut self, min_size: usize, hasher: impl Fn(&T) -> u64, flags: Flags) {
         // Calculate the minimal number of elements that we need to reserve
         // space for.
         let min_size = usize::max(self.table.items, min_size);
@@ -956,7 +960,7 @@ impl<T, A: Allocator> RawTable<T, A> {
             // Fast path if the table is empty
             if self.table.items == 0 {
                 let new_inner =
-                    RawTableInner::with_capacity(&self.alloc, Self::TABLE_LAYOUT, min_size);
+                    RawTableInner::with_capacity(&self.alloc, Self::TABLE_LAYOUT, min_size, flags);
                 let mut old_inner = mem::replace(&mut self.table, new_inner);
                 unsafe {
                     // SAFETY:
@@ -975,7 +979,7 @@ impl<T, A: Allocator> RawTable<T, A> {
                     // 2. The [`RawTableInner`] must already have properly initialized control bytes since
                     //    we will never expose RawTable::new_uninitialized in a public API.
                     if self
-                        .resize(min_size, hasher, Fallibility::Infallible)
+                        .resize(min_size, hasher, Fallibility::Infallible, flags)
                         .is_err()
                     {
                         // SAFETY: The result of calling the `resize` function cannot be an error
@@ -990,14 +994,14 @@ impl<T, A: Allocator> RawTable<T, A> {
     /// Ensures that at least `additional` items can be inserted into the table
     /// without reallocation.
     #[cfg_attr(feature = "inline-more", inline)]
-    pub fn reserve(&mut self, additional: usize, hasher: impl Fn(&T) -> u64) {
+    pub fn reserve(&mut self, additional: usize, hasher: impl Fn(&T) -> u64, flags: Flags) {
         if unlikely(additional > self.table.growth_left) {
             // Avoid `Result::unwrap_or_else` because it bloats LLVM IR.
             unsafe {
                 // SAFETY: The [`RawTableInner`] must already have properly initialized control
                 // bytes since we will never expose RawTable::new_uninitialized in a public API.
                 if self
-                    .reserve_rehash(additional, hasher, Fallibility::Infallible)
+                    .reserve_rehash(additional, hasher, Fallibility::Infallible, flags)
                     .is_err()
                 {
                     // SAFETY: All allocation errors will be caught inside `RawTableInner::reserve_rehash`.
@@ -1014,11 +1018,12 @@ impl<T, A: Allocator> RawTable<T, A> {
         &mut self,
         additional: usize,
         hasher: impl Fn(&T) -> u64,
+        flags: Flags,
     ) -> Result<(), TryReserveError> {
         if additional > self.table.growth_left {
             // SAFETY: The [`RawTableInner`] must already have properly initialized control
             // bytes since we will never expose RawTable::new_uninitialized in a public API.
-            unsafe { self.reserve_rehash(additional, hasher, Fallibility::Fallible) }
+            unsafe { self.reserve_rehash(additional, hasher, Fallibility::Fallible, flags) }
         } else {
             Ok(())
         }
@@ -1039,6 +1044,7 @@ impl<T, A: Allocator> RawTable<T, A> {
         additional: usize,
         hasher: impl Fn(&T) -> u64,
         fallibility: Fallibility,
+        flags: Flags,
     ) -> Result<(), TryReserveError> {
         unsafe {
             // SAFETY:
@@ -1059,6 +1065,7 @@ impl<T, A: Allocator> RawTable<T, A> {
                 } else {
                     None
                 },
+                flags,
             )
         }
     }
@@ -1095,6 +1102,7 @@ impl<T, A: Allocator> RawTable<T, A> {
         capacity: usize,
         hasher: impl Fn(&T) -> u64,
         fallibility: Fallibility,
+        flags: Flags,
     ) -> Result<(), TryReserveError> {
         // SAFETY:
         // 1. The caller of this function guarantees that `capacity >= self.table.items`.
@@ -1108,6 +1116,7 @@ impl<T, A: Allocator> RawTable<T, A> {
             &|table, index| hasher(table.bucket::<T>(index).as_ref()),
             fallibility,
             Self::TABLE_LAYOUT,
+            flags,
         )
     }
 
@@ -1115,7 +1124,13 @@ impl<T, A: Allocator> RawTable<T, A> {
     ///
     /// This does not check if the given element already exists in the table.
     #[cfg_attr(feature = "inline-more", inline)]
-    pub fn insert(&mut self, hash: u64, value: T, hasher: impl Fn(&T) -> u64) -> Bucket<T> {
+    pub fn insert(
+        &mut self,
+        hash: u64,
+        value: T,
+        hasher: impl Fn(&T) -> u64,
+        flags: Flags,
+    ) -> Bucket<T> {
         unsafe {
             // SAFETY:
             // 1. The [`RawTableInner`] must already have properly initialized control bytes since
@@ -1131,7 +1146,7 @@ impl<T, A: Allocator> RawTable<T, A> {
             // in the range `0..=self.buckets()`.
             let old_ctrl = *self.table.ctrl(slot.index);
             if unlikely(self.table.growth_left == 0 && old_ctrl.special_is_empty()) {
-                self.reserve(1, hasher);
+                self.reserve(1, hasher, flags);
                 // SAFETY: We know for sure that `RawTableInner` has control bytes
                 // initialized and that there is extra space in the table.
                 slot = self.table.find_insert_slot(hash);
@@ -1145,8 +1160,14 @@ impl<T, A: Allocator> RawTable<T, A> {
     ///
     /// This does not check if the given element already exists in the table.
     #[cfg_attr(feature = "inline-more", inline)]
-    pub fn insert_entry(&mut self, hash: u64, value: T, hasher: impl Fn(&T) -> u64) -> &mut T {
-        unsafe { self.insert(hash, value, hasher).as_mut() }
+    pub fn insert_entry(
+        &mut self,
+        hash: u64,
+        value: T,
+        hasher: impl Fn(&T) -> u64,
+        flags: Flags,
+    ) -> &mut T {
+        unsafe { self.insert(hash, value, hasher, flags).as_mut() }
     }
 
     /// Inserts a new element into the table, without growing the table.
@@ -1208,8 +1229,9 @@ impl<T, A: Allocator> RawTable<T, A> {
         hash: u64,
         mut eq: impl FnMut(&T) -> bool,
         hasher: impl Fn(&T) -> u64,
+        flags: Flags,
     ) -> Result<Bucket<T>, InsertSlot> {
-        self.reserve(1, hasher);
+        self.reserve(1, hasher, flags);
 
         unsafe {
             // SAFETY:
@@ -1527,6 +1549,7 @@ impl RawTableInner {
         table_layout: TableLayout,
         buckets: usize,
         fallibility: Fallibility,
+        flags: Flags,
     ) -> Result<Self, TryReserveError>
     where
         A: Allocator,
@@ -1539,7 +1562,7 @@ impl RawTableInner {
             None => return Err(fallibility.capacity_overflow()),
         };
 
-        let ptr: NonNull<u8> = match do_alloc::<A>(layout) {
+        let ptr: NonNull<u8> = match do_alloc::<A>(layout, flags) {
             Ok(block) => block.cast(),
             Err(_) => return Err(fallibility.alloc_err(layout)),
         };
@@ -1564,6 +1587,7 @@ impl RawTableInner {
         table_layout: TableLayout,
         capacity: usize,
         fallibility: Fallibility,
+        flags: Flags,
     ) -> Result<Self, TryReserveError>
     where
         A: Allocator,
@@ -1577,7 +1601,8 @@ impl RawTableInner {
                 let buckets =
                     capacity_to_buckets(capacity).ok_or_else(|| fallibility.capacity_overflow())?;
 
-                let result = Self::new_uninitialized(alloc, table_layout, buckets, fallibility)?;
+                let result =
+                    Self::new_uninitialized(alloc, table_layout, buckets, fallibility, flags)?;
                 // SAFETY: We checked that the table is allocated and therefore the table already has
                 // `self.bucket_mask + 1 + Group::WIDTH` number of control bytes (see TableLayout::calculate_layout_for)
                 // so writing `self.num_ctrl_bytes() == bucket_mask + 1 + Group::WIDTH` bytes is safe.
@@ -1601,12 +1626,18 @@ impl RawTableInner {
     ///
     /// [`fallible_with_capacity`]: RawTableInner::fallible_with_capacity
     /// [`abort`]: https://doc.rust-lang.org/alloc/alloc/fn.handle_alloc_error.html
-    fn with_capacity<A>(alloc: &A, table_layout: TableLayout, capacity: usize) -> Self
+    fn with_capacity<A>(alloc: &A, table_layout: TableLayout, capacity: usize, flags: Flags) -> Self
     where
         A: Allocator,
     {
         // Avoid `Result::unwrap_or_else` because it bloats LLVM IR.
-        match Self::fallible_with_capacity(alloc, table_layout, capacity, Fallibility::Infallible) {
+        match Self::fallible_with_capacity(
+            alloc,
+            table_layout,
+            capacity,
+            Fallibility::Infallible,
+            flags,
+        ) {
             Ok(table_inner) => table_inner,
             // SAFETY: All allocation errors will be caught inside `RawTableInner::new_uninitialized`.
             Err(_) => unsafe { hint::unreachable_unchecked() },
@@ -2632,6 +2663,7 @@ impl RawTableInner {
         table_layout: TableLayout,
         capacity: usize,
         fallibility: Fallibility,
+        flags: Flags,
     ) -> Result<
         crate::hash::scopeguard::ScopeGuard<Self, impl FnMut(&mut Self) + 'a>,
         TryReserveError,
@@ -2642,8 +2674,13 @@ impl RawTableInner {
         debug_assert!(self.items <= capacity);
 
         // Allocate and initialize the new table.
-        let new_table =
-            RawTableInner::fallible_with_capacity(alloc, table_layout, capacity, fallibility)?;
+        let new_table = RawTableInner::fallible_with_capacity(
+            alloc,
+            table_layout,
+            capacity,
+            fallibility,
+            flags,
+        )?;
 
         // The hash function may panic, in which case we simply free the new
         // table without dropping any elements that may have been copied into
@@ -2694,6 +2731,7 @@ impl RawTableInner {
         fallibility: Fallibility,
         layout: TableLayout,
         drop: Option<unsafe fn(*mut u8)>,
+        flags: Flags,
     ) -> Result<(), TryReserveError>
     where
         A: Allocator,
@@ -2735,6 +2773,7 @@ impl RawTableInner {
                 hasher,
                 fallibility,
                 layout,
+                flags,
             )
         }
     }
@@ -2835,13 +2874,14 @@ impl RawTableInner {
         hasher: &dyn Fn(&mut Self, usize) -> u64,
         fallibility: Fallibility,
         layout: TableLayout,
+        flags: Flags,
     ) -> Result<(), TryReserveError>
     where
         A: Allocator,
     {
         // SAFETY: We know for sure that `alloc` and `layout` matches the [`Allocator`] and [`TableLayout`]
         // that were used to allocate this table.
-        let mut new_table = self.prepare_resize(alloc, layout, capacity, fallibility)?;
+        let mut new_table = self.prepare_resize(alloc, layout, capacity, fallibility, flags)?;
 
         // SAFETY: We know for sure that RawTableInner will outlive the
         // returned `FullBucketsIndices` iterator, and the caller of this
@@ -3232,6 +3272,7 @@ impl<T: Clone, A: Allocator + Clone> Clone for RawTable<T, A> {
                     self.alloc.clone(),
                     self.table.buckets(),
                     Fallibility::Infallible,
+                    GFP_KERNEL,
                 ) {
                     Ok(table) => table,
                     Err(_) => hint::unreachable_unchecked(),
@@ -3290,6 +3331,7 @@ impl<T: Clone, A: Allocator + Clone> Clone for RawTable<T, A> {
                         Self::TABLE_LAYOUT,
                         source.buckets(),
                         Fallibility::Infallible,
+                        GFP_KERNEL,
                     ) {
                         Ok(table) => table,
                         Err(_) => hint::unreachable_unchecked(),
