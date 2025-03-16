@@ -1130,7 +1130,7 @@ where
     /// assert!(map.capacity() >= 10);
     /// ```
     #[cfg_attr(feature = "inline-more", inline)]
-    pub fn reserve(&mut self, additional: usize) {
+    pub(super) fn reserve(&mut self, additional: usize) {
         self.table
             .reserve(additional, make_hasher::<_, V, S>(&self.hash_builder));
     }
@@ -1817,7 +1817,7 @@ where
     /// assert_eq!(map[&37], "c");
     /// ```
     #[cfg_attr(feature = "inline-more", inline)]
-    pub fn insert(&mut self, k: K, v: V) -> Option<V> {
+    pub(super) fn insert(&mut self, k: K, v: V) -> Option<V> {
         let hash = make_hash::<K, S>(&self.hash_builder, &k);
         match self.find_or_find_insert_slot(hash, &k) {
             Ok(bucket) => Some(mem::replace(unsafe { &mut bucket.as_mut().1 }, v)),
@@ -1827,6 +1827,52 @@ where
                 }
                 None
             }
+        }
+    }
+
+    /// Inserts a key-value pair into the map, resizing if needed.
+    ///
+    /// Returns a [`TryReserveError`] if the allocation fails.
+    ///
+    /// If the map did not have this key present, [`None`] is returned.
+    ///
+    /// If the map did have this key present, the value is updated, and the old
+    /// value is returned. The key is not updated, though; this matters for
+    /// types that can be `==` without being identical. See the [`std::collections`]
+    /// [module-level documentation] for more.
+    ///
+    /// [`None`]: https://doc.rust-lang.org/std/option/enum.Option.html#variant.None
+    /// [`std::collections`]: https://doc.rust-lang.org/std/collections/index.html
+    /// [module-level documentation]: https://doc.rust-lang.org/std/collections/index.html#insert-and-complex-keys
+    #[cfg_attr(feature = "inline-more", inline)]
+    pub fn insert_resize_if_needed(&mut self, k: K, v: V) -> Result<Option<V>, TryReserveError> {
+        if self.len() == self.capacity() {
+            self.try_reserve(1)?;
+        }
+
+        Ok(self.insert(k, v))
+    }
+
+    /// Inserts a key-value pair into the map if there is capacity for it.
+    ///
+    /// Returns `Err(())` if the capacity is too low.
+    ///
+    /// If the map did not have this key present, [`None`] is returned.
+    ///
+    /// If the map did have this key present, the value is updated, and the old
+    /// value is returned. The key is not updated, though; this matters for
+    /// types that can be `==` without being identical. See the [`std::collections`]
+    /// [module-level documentation] for more.
+    ///
+    /// [`None`]: https://doc.rust-lang.org/std/option/enum.Option.html#variant.None
+    /// [`std::collections`]: https://doc.rust-lang.org/std/collections/index.html
+    /// [module-level documentation]: https://doc.rust-lang.org/std/collections/index.html#insert-and-complex-keys
+    #[cfg_attr(feature = "inline-more", inline)]
+    pub fn insert_if_capacity(&mut self, k: K, v: V) -> Result<Option<V>, ()> {
+        if self.len() == self.capacity() {
+            Err(())
+        } else {
+            Ok(self.insert(k, v))
         }
     }
 

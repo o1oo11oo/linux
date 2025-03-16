@@ -620,32 +620,6 @@ where
     S: BuildHasher,
     A: Allocator,
 {
-    /// Reserves capacity for at least `additional` more elements to be inserted
-    /// in the `HashSet`. The collection may reserve more space to avoid
-    /// frequent reallocations.
-    ///
-    /// # Panics
-    ///
-    /// Panics if the new capacity exceeds [`isize::MAX`] bytes and [`abort`] the program
-    /// in case of allocation error. Use [`try_reserve`](HashSet::try_reserve) instead
-    /// if you want to handle memory allocation failure.
-    ///
-    /// [`isize::MAX`]: https://doc.rust-lang.org/std/primitive.isize.html
-    /// [`abort`]: https://doc.rust-lang.org/alloc/alloc/fn.handle_alloc_error.html
-    ///
-    /// # Examples
-    ///
-    /// ```
-    /// use hashbrown::HashSet;
-    /// let mut set: HashSet<i32> = HashSet::new();
-    /// set.reserve(10);
-    /// assert!(set.capacity() >= 10);
-    /// ```
-    #[cfg_attr(feature = "inline-more", inline)]
-    pub fn reserve(&mut self, additional: usize) {
-        self.map.reserve(additional);
-    }
-
     /// Tries to reserve capacity for at least `additional` more elements to be inserted
     /// in the given `HashSet<K,V>`. The collection may reserve more space to avoid
     /// frequent reallocations.
@@ -1085,8 +1059,21 @@ where
     /// assert_eq!(set.len(), 1);
     /// ```
     #[cfg_attr(feature = "inline-more", inline)]
-    pub fn insert(&mut self, value: T) -> bool {
+    pub(super) fn insert(&mut self, value: T) -> bool {
         self.map.insert(value, ()).is_none()
+    }
+
+    /// Adds a value to the set, resizing if needed.
+    ///
+    /// Returns a [`TryReserveError`] if the allocation fails.
+    ///
+    /// If the set did not have this value present, `true` is returned.
+    ///
+    /// If the set did have this value present, `false` is returned.
+    ///
+    #[cfg_attr(feature = "inline-more", inline)]
+    pub fn insert_resize_if_needed(&mut self, value: T) -> Result<bool, TryReserveError> {
+        Ok(self.map.insert_resize_if_needed(value, ())?.is_none())
     }
 
     /// Insert a value the set without checking if the value already exists in the set.
