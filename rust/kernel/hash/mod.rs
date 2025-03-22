@@ -31,6 +31,13 @@
     clippy::manual_map,
     clippy::missing_safety_doc,
     clippy::missing_errors_doc,
+    clippy::ignored_unit_patterns,
+    clippy::manual_hash_one,
+    clippy::non_minimal_cfg,
+    clippy::too_many_arguments,
+    clippy::undocumented_unsafe_blocks,
+    clippy::unnecessary_map_or,
+    clippy::unnecessary_safety_comment,
     unreachable_pub,
     unsafe_op_in_unsafe_fn
 )]
