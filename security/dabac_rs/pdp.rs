@@ -6,7 +6,7 @@
 
 use kernel::{
     bindings, c_str,
-    fs::File,
+    fs::LocalFile,
     hash::HashMap,
     prelude::*,
     str::CString,
@@ -93,7 +93,7 @@ pub(crate) fn set_policy(policy: Policy) -> Result<()> {
 /// Gets called everytime a file gets read or written. Returns Ok(true) when the
 /// access should be allowed, Ok(false) otherwise. Errors most commonly occur on
 /// allocation failures.
-pub(crate) fn file_permission(file: &File, mask: i32) -> Result<bool> {
+pub(crate) fn file_permission(file: &LocalFile, mask: i32) -> Result<bool> {
     let full_name = helpers::file_get_full_name(file)?;
 
     // Allow everything unprotected/out of scope

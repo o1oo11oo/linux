@@ -8,7 +8,7 @@
 use kernel::{
     alloc::Flags,
     bindings::{dentry_path_raw, PATH_MAX},
-    fs::File,
+    fs::LocalFile,
     kvec,
     prelude::*,
     str::{BStr, CStr, CString},
@@ -20,7 +20,7 @@ pub(crate) fn get_current_euid() -> usize {
 }
 
 // based on the unmerged fs bindings
-pub(crate) fn _file_get_name(file: &File) -> &BStr {
+pub(crate) fn _file_get_name(file: &LocalFile) -> &BStr {
     let dentry = unsafe { (*file.as_ptr()).f_path.dentry };
     let dname = unsafe { (*dentry).d_name };
     let len = unsafe { dname.__bindgen_anon_1.__bindgen_anon_1.len } as _;
@@ -28,14 +28,14 @@ pub(crate) fn _file_get_name(file: &File) -> &BStr {
     BStr::from_bytes(bytes)
 }
 
-pub(crate) fn file_get_full_name(file: &File) -> Result<CString> {
+pub(crate) fn file_get_full_name(file: &LocalFile) -> Result<CString> {
     let mut buf = kvec![0u8; PATH_MAX as _]?;
     let dentry = unsafe { (*file.as_ptr()).f_path.dentry };
     let full_name = unsafe { dentry_path_raw(dentry, buf.as_mut_ptr(), buf.len() as _) };
     Ok(unsafe { CStr::from_char_ptr(full_name as _) }.try_into()?)
 }
 
-pub(crate) fn file_get_inode_number(file: &File) -> kernel::ffi::c_ulong {
+pub(crate) fn file_get_inode_number(file: &LocalFile) -> kernel::ffi::c_ulong {
     let inode = unsafe { (*file.as_ptr()).f_inode };
     unsafe { (*inode).i_ino }
 }

@@ -14,7 +14,7 @@
 use kernel::{
     bindings, c_str,
     ffi::*,
-    fs::File,
+    fs::LocalFile,
     prelude::*,
     str::CString,
     types::Opaque,
@@ -108,7 +108,7 @@ static mut DABAC_RS_HOOKS: SecurityHookList =
 /// Callback for the `file_permission` hook, gets called every time a file is
 /// read or written.
 unsafe extern "C" fn file_permission(file: *mut bindings::file, mask: c_int) -> c_int {
-    let file = unsafe { File::from_raw_file(file) };
+    let file = unsafe { LocalFile::from_raw_file(file) };
 
     match pdp::file_permission(file, mask) {
         Ok(allowed) => {
