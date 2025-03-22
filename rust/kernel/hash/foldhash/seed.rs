@@ -1,5 +1,7 @@
 use core::hash::BuildHasher;
 
+use crate::prelude::*;
+
 // These constants may end up unused depending on platform support.
 #[allow(unused)]
 use crate::hash::foldhash::{ARBITRARY1, ARBITRARY9};
@@ -31,7 +33,9 @@ pub mod fast {
         /// This needs to be replaced with a properly seeded instance before the
         /// state gets used, otherwise everything will use the same seed.
         pub const unsafe fn new_uninitialized() -> Self {
-            let per_hasher_seed = 0;
+            // chosen by fair dice roll.
+            // guaranteed to be random.
+            let per_hasher_seed = 4;
 
             Self {
                 per_hasher_seed,
@@ -87,6 +91,11 @@ pub mod fast {
                 per_hasher_seed = folded_multiply(per_hasher_seed, ARBITRARY1 ^ nondeterminism);
                 PER_HASHER_NONDETERMINISM.store(per_hasher_seed as usize, Ordering::Relaxed);
             }
+
+            // Add some randomness from kernel urandom
+            // SAFETY: just an FFI call
+            let rand = unsafe { bindings::get_random_u64() };
+            per_hasher_seed = folded_multiply(per_hasher_seed, rand);
 
             // One extra mixing step to ensure good random bits.
             per_hasher_seed = folded_multiply(per_hasher_seed, ARBITRARY2);
@@ -236,6 +245,37 @@ mod global {
             }
 
             let box_ptr = &*Box::new(0u8) as *const _;
+            seed = mix(seed, box_ptr as usize as u64);
+        }
+
+        // Add randomness from sources available in kernel, as inspired by
+        // std-reliant code: urandom, time and alloc pointer
+
+        let mut buf = [0u64; 4];
+        // SAFETY: FFI call which writes the result to buf. buf is valid for
+        // this since we just initialized it. The alignment of u64 is greater
+        // than the one required for c_void, all bit patterns are valid for u64
+        // and there are no padding bytes getting accessed. Since c_void is only
+        // 1 byte long, we need to multiply the length by 8.
+        unsafe {
+            bindings::get_random_bytes(&mut buf as *mut u64 as *mut ffi::c_void, buf.len() * 8)
+        }
+        seed = mix(seed, buf[0]);
+        seed = mix(seed, buf[1]);
+        seed = mix(seed, buf[2]);
+        seed = mix(seed, buf[3]);
+
+        let mut ts = bindings::timespec64 {
+            tv_sec: 0,
+            tv_nsec: 0,
+        };
+        // SAFETY: FFI call which the timespec64 pointer is valid for
+        unsafe { bindings::ktime_get_ts64(&mut ts) };
+        seed = mix(seed, ts.tv_nsec as u64);
+        seed = mix(seed, ts.tv_sec as u64);
+
+        if let Ok(kbox) = KBox::new(0u8, GFP_KERNEL) {
+            let box_ptr = &*kbox as *const _;
             seed = mix(seed, box_ptr as usize as u64);
         }
 
