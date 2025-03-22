@@ -13,11 +13,6 @@ mod pdp;
 mod pip;
 mod policy;
 
-// Export functions which are called by C, even though that's probably unnecessary
-pub use bindings::{
-    dabac_rs_file_permission, dabac_rs_init, dabac_rs_update_env_attr, dabac_rs_update_object_attr,
-    dabac_rs_update_policy, dabac_rs_update_user_attr,
-};
 use kernel::prelude::*;
 
 /// Prefix to appear before log messages printed from within this crate.

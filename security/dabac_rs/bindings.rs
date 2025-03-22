@@ -59,7 +59,7 @@ static DABAC_RS_LSMID: LsmId = LsmId(Opaque::new(bindings::lsm_id {
 #[link_section = ".lsm_info.init"]
 static DABAC_RS_LSMINFO: LsmInfo = LsmInfo(Opaque::new(bindings::lsm_info {
     name: NAME.as_char_ptr(),
-    init: Some(dabac_rs_init),
+    init: Some(init),
     order: bindings::lsm_order_LSM_ORDER_MUTABLE,
     flags: 0,
     enabled: core::ptr::null_mut(),
@@ -68,9 +68,8 @@ static DABAC_RS_LSMINFO: LsmInfo = LsmInfo(Opaque::new(bindings::lsm_info {
 
 /// Init function for the LSM, gets called from C through the pointer stored in
 /// `lsm_info`.
-#[no_mangle]
 #[link_section = ".init.text"]
-pub extern "C" fn dabac_rs_init() -> c_int {
+unsafe extern "C" fn init() -> c_int {
     pr_info!("Rust DABAC LSM is starting...\n");
 
     // Register hooks
@@ -100,15 +99,14 @@ static mut DABAC_RS_HOOKS: SecurityHookList =
     SecurityHookList(Opaque::new([bindings::security_hook_list {
         scalls: unsafe { &raw mut bindings::static_calls_table.file_permission as _ },
         hook: bindings::security_list_options {
-            file_permission: Some(dabac_rs_file_permission),
+            file_permission: Some(file_permission),
         },
         lsmid: DABAC_RS_LSMID.0.get(),
     }]));
 
 /// Callback for the `file_permission` hook, gets called every time a file is
 /// read or written.
-#[no_mangle]
-pub extern "C" fn dabac_rs_file_permission(file: *mut bindings::file, mask: c_int) -> c_int {
+unsafe extern "C" fn file_permission(file: *mut bindings::file, mask: c_int) -> c_int {
     let file = unsafe { File::from_raw_file(file) };
 
     match pdp::file_permission(file, mask) {
@@ -129,11 +127,11 @@ pub extern "C" fn dabac_rs_file_permission(file: *mut bindings::file, mask: c_in
 /// function that copies the data from userspace before delegating to the actual
 /// function in the PAP.
 #[no_mangle]
-pub extern "C" fn dabac_rs_update_user_attr(
+unsafe extern "C" fn dabac_rs_update_user_attr(
     _file: *mut bindings::file,
     ptr: UserPtr,
     length: c_ulong,
-    _offset: c_longlong,
+    _offset: *mut c_longlong,
 ) -> c_int {
     update_policy_or_attrs(pap::update_user_attr, ptr, length)
 }
@@ -144,11 +142,11 @@ pub extern "C" fn dabac_rs_update_user_attr(
 /// function that copies the data from userspace before delegating to the actual
 /// function in the PAP.
 #[no_mangle]
-pub extern "C" fn dabac_rs_update_object_attr(
+unsafe extern "C" fn dabac_rs_update_object_attr(
     _file: *mut bindings::file,
     ptr: UserPtr,
     length: c_ulong,
-    _offset: c_longlong,
+    _offset: *mut c_longlong,
 ) -> c_int {
     update_policy_or_attrs(pap::update_object_attr, ptr, length)
 }
@@ -159,11 +157,11 @@ pub extern "C" fn dabac_rs_update_object_attr(
 /// function that copies the data from userspace before delegating to the actual
 /// function in the PAP.
 #[no_mangle]
-pub extern "C" fn dabac_rs_update_env_attr(
+unsafe extern "C" fn dabac_rs_update_env_attr(
     _file: *mut bindings::file,
     ptr: UserPtr,
     length: c_ulong,
-    _offset: c_longlong,
+    _offset: *mut c_longlong,
 ) -> c_int {
     update_policy_or_attrs(pap::update_env_attr, ptr, length)
 }
@@ -174,11 +172,11 @@ pub extern "C" fn dabac_rs_update_env_attr(
 /// function that copies the data from userspace before delegating to the actual
 /// function in the PAP.
 #[no_mangle]
-pub extern "C" fn dabac_rs_update_policy(
+unsafe extern "C" fn dabac_rs_update_policy(
     _file: *mut bindings::file,
     ptr: UserPtr,
     length: c_ulong,
-    _offset: c_longlong,
+    _offset: *mut c_longlong,
 ) -> c_int {
     update_policy_or_attrs(pap::update_policy, ptr, length)
 }
