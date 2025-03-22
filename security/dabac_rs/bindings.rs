@@ -33,6 +33,9 @@ const SECURITY_HOOK_LIST_LEN: usize = 1;
 /// Wrapper to be able to use `lsm_id` in a static context.
 #[repr(transparent)]
 struct LsmId(Opaque<bindings::lsm_id>);
+
+// SAFETY: There is only a static instance and in that one the pointer field
+// points to an immutable C string.
 unsafe impl Sync for LsmId {}
 
 /// Wrapper to be able to use `lsm_info` in a static context.
@@ -41,11 +44,17 @@ unsafe impl Sync for LsmId {}
 // with repr(transparent).
 #[repr(transparent)]
 struct LsmInfo(Opaque<bindings::lsm_info>);
+
+// SAFETY: There is only a static instance and in that one the pointer fields
+// points to an immutable C string and the init function defined here.
 unsafe impl Sync for LsmInfo {}
 
 /// Wrapper to be able to use `security_hook_list` in a static context.
 #[repr(transparent)]
 struct SecurityHookList(Opaque<[bindings::security_hook_list; SECURITY_HOOK_LIST_LEN]>);
+
+// SAFETY: There is only a static instance, which is only modified from C during
+// LSM initialization
 unsafe impl Sync for SecurityHookList {}
 
 /// Static information about the LSM.
@@ -69,11 +78,18 @@ static DABAC_RS_LSMINFO: LsmInfo = LsmInfo(Opaque::new(bindings::lsm_info {
 
 /// Init function for the LSM, gets called from C through the pointer stored in
 /// `lsm_info`.
+///
+/// # Safety
+///
+/// This function must only be called once from the C LSM initialization code.
 #[link_section = ".init.text"]
 unsafe extern "C" fn init() -> c_int {
     pr_info!("Rust DABAC LSM is starting...\n");
 
     // Register hooks
+    // SAFETY: FFI call to register the hooks for the LSM, uses &raw mut to
+    // create a pointer to the static mut without creating a reference. All
+    // pointers point to statics and are therefore valid for the call.
     unsafe {
         bindings::security_add_hooks(
             &raw mut DABAC_RS_HOOKS.0 as _,
@@ -98,6 +114,9 @@ unsafe extern "C" fn init() -> c_int {
 #[link_section = ".data..ro_after_init"]
 static mut DABAC_RS_HOOKS: SecurityHookList =
     SecurityHookList(Opaque::new([bindings::security_hook_list {
+        // SAFETY: Creates an unaligned pointer to the mutable static since the
+        // `static_calls_table` is `repr(packed)`. Should be safe but Rust
+        // treats this as accessing a mutable static.
         scalls: unsafe { &raw mut bindings::static_calls_table.file_permission as _ },
         hook: bindings::security_list_options {
             file_permission: Some(file_permission),
@@ -107,7 +126,13 @@ static mut DABAC_RS_HOOKS: SecurityHookList =
 
 /// Callback for the `file_permission` hook, gets called every time a file is
 /// read or written.
+///
+/// # Safety
+///
+/// May only be called by the LSM framework as `file_permission` hook with a
+/// file pointer valid for the duration of the call.
 unsafe extern "C" fn file_permission(file: *mut bindings::file, mask: c_int) -> c_int {
+    // SAFETY: `file` is valid for the duration of this call
     let file = unsafe { LocalFile::from_raw_file(file) };
 
     match pdp::file_permission(file, mask) {
@@ -126,6 +151,10 @@ unsafe extern "C" fn file_permission(file: *mut bindings::file, mask: c_int) -> 
 ///
 /// Called from the C implementation of the dabac_rs securityfs. Small glue
 /// function that gets the data from the PAP and then copies it to userspace.
+///
+/// # Safety
+///
+/// May only be used as `read` function pointer in `struct file_operations`
 #[no_mangle]
 unsafe extern "C" fn dabac_rs_read_user_attr(
     _file: *mut bindings::file,
@@ -141,6 +170,10 @@ unsafe extern "C" fn dabac_rs_read_user_attr(
 /// Called from the C implementation of the dabac_rs securityfs. Small glue
 /// function that copies the data from userspace before delegating to the actual
 /// function in the PAP.
+///
+/// # Safety
+///
+/// May only be used as `write` function pointer in `struct file_operations`
 #[no_mangle]
 unsafe extern "C" fn dabac_rs_update_user_attr(
     _file: *mut bindings::file,
@@ -155,6 +188,10 @@ unsafe extern "C" fn dabac_rs_update_user_attr(
 ///
 /// Called from the C implementation of the dabac_rs securityfs. Small glue
 /// function that gets the data from the PAP and then copies it to userspace.
+///
+/// # Safety
+///
+/// May only be used as `read` function pointer in `struct file_operations`
 #[no_mangle]
 unsafe extern "C" fn dabac_rs_read_object_attr(
     _file: *mut bindings::file,
@@ -170,6 +207,10 @@ unsafe extern "C" fn dabac_rs_read_object_attr(
 /// Called from the C implementation of the dabac_rs securityfs. Small glue
 /// function that copies the data from userspace before delegating to the actual
 /// function in the PAP.
+///
+/// # Safety
+///
+/// May only be used as `write` function pointer in `struct file_operations`
 #[no_mangle]
 unsafe extern "C" fn dabac_rs_update_object_attr(
     _file: *mut bindings::file,
@@ -184,6 +225,10 @@ unsafe extern "C" fn dabac_rs_update_object_attr(
 ///
 /// Called from the C implementation of the dabac_rs securityfs. Small glue
 /// function that gets the data from the PAP and then copies it to userspace.
+///
+/// # Safety
+///
+/// May only be used as `read` function pointer in `struct file_operations`
 #[no_mangle]
 unsafe extern "C" fn dabac_rs_read_env_attr(
     _file: *mut bindings::file,
@@ -199,6 +244,10 @@ unsafe extern "C" fn dabac_rs_read_env_attr(
 /// Called from the C implementation of the dabac_rs securityfs. Small glue
 /// function that copies the data from userspace before delegating to the actual
 /// function in the PAP.
+///
+/// # Safety
+///
+/// May only be used as `write` function pointer in `struct file_operations`
 #[no_mangle]
 unsafe extern "C" fn dabac_rs_update_env_attr(
     _file: *mut bindings::file,
@@ -213,6 +262,10 @@ unsafe extern "C" fn dabac_rs_update_env_attr(
 ///
 /// Called from the C implementation of the dabac_rs securityfs. Small glue
 /// function that gets the data from the PAP and then copies it to userspace.
+///
+/// # Safety
+///
+/// May only be used as `read` function pointer in `struct file_operations`
 #[no_mangle]
 unsafe extern "C" fn dabac_rs_read_policy(
     _file: *mut bindings::file,
@@ -228,6 +281,10 @@ unsafe extern "C" fn dabac_rs_read_policy(
 /// Called from the C implementation of the dabac_rs securityfs. Small glue
 /// function that copies the data from userspace before delegating to the actual
 /// function in the PAP.
+///
+/// # Safety
+///
+/// May only be used as `write` function pointer in `struct file_operations`
 #[no_mangle]
 unsafe extern "C" fn dabac_rs_update_policy(
     _file: *mut bindings::file,
