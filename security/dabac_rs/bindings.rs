@@ -16,6 +16,7 @@ use kernel::{
     ffi::*,
     fs::File,
     prelude::*,
+    str::CString,
     types::Opaque,
     uaccess::{UserPtr, UserSlice},
 };
@@ -121,6 +122,20 @@ unsafe extern "C" fn file_permission(file: *mut bindings::file, mask: c_int) -> 
     }
 }
 
+/// Read the currently set user attributes
+///
+/// Called from the C implementation of the dabac_rs securityfs. Small glue
+/// function that gets the data from the PAP and then copies it to userspace.
+#[no_mangle]
+unsafe extern "C" fn dabac_rs_read_user_attr(
+    _file: *mut bindings::file,
+    ptr: UserPtr,
+    count: c_ulong,
+    offset: *mut c_longlong,
+) -> c_int {
+    read_str(pap::read_user_attr, ptr, count, offset)
+}
+
 /// Update the user attributes
 ///
 /// Called from the C implementation of the dabac_rs securityfs. Small glue
@@ -134,6 +149,20 @@ unsafe extern "C" fn dabac_rs_update_user_attr(
     _offset: *mut c_longlong,
 ) -> c_int {
     update_policy_or_attrs(pap::update_user_attr, ptr, length)
+}
+
+/// Read the currently set object attributes
+///
+/// Called from the C implementation of the dabac_rs securityfs. Small glue
+/// function that gets the data from the PAP and then copies it to userspace.
+#[no_mangle]
+unsafe extern "C" fn dabac_rs_read_object_attr(
+    _file: *mut bindings::file,
+    ptr: UserPtr,
+    count: c_ulong,
+    offset: *mut c_longlong,
+) -> c_int {
+    read_str(pap::read_object_attr, ptr, count, offset)
 }
 
 /// Update the object attributes
@@ -151,6 +180,20 @@ unsafe extern "C" fn dabac_rs_update_object_attr(
     update_policy_or_attrs(pap::update_object_attr, ptr, length)
 }
 
+/// Read the currently set environmental attributes
+///
+/// Called from the C implementation of the dabac_rs securityfs. Small glue
+/// function that gets the data from the PAP and then copies it to userspace.
+#[no_mangle]
+unsafe extern "C" fn dabac_rs_read_env_attr(
+    _file: *mut bindings::file,
+    ptr: UserPtr,
+    count: c_ulong,
+    offset: *mut c_longlong,
+) -> c_int {
+    read_str(pap::read_env_attr, ptr, count, offset)
+}
+
 /// Update the environmental attributes
 ///
 /// Called from the C implementation of the dabac_rs securityfs. Small glue
@@ -166,6 +209,20 @@ unsafe extern "C" fn dabac_rs_update_env_attr(
     update_policy_or_attrs(pap::update_env_attr, ptr, length)
 }
 
+/// Read the currently configured policy
+///
+/// Called from the C implementation of the dabac_rs securityfs. Small glue
+/// function that gets the data from the PAP and then copies it to userspace.
+#[no_mangle]
+unsafe extern "C" fn dabac_rs_read_policy(
+    _file: *mut bindings::file,
+    ptr: UserPtr,
+    count: c_ulong,
+    offset: *mut c_longlong,
+) -> c_int {
+    read_str(pap::read_policy, ptr, count, offset)
+}
+
 /// Update the policy
 ///
 /// Called from the C implementation of the dabac_rs securityfs. Small glue
@@ -179,6 +236,54 @@ unsafe extern "C" fn dabac_rs_update_policy(
     _offset: *mut c_longlong,
 ) -> c_int {
     update_policy_or_attrs(pap::update_policy, ptr, length)
+}
+
+/// Read a CString from user space
+///
+/// Implemented as helper function because they all do the same.
+fn read_str(
+    target: fn() -> Result<CString>,
+    ptr: UserPtr,
+    count: c_ulong,
+    offset: *mut c_longlong,
+) -> c_int {
+    // Get the position requested
+    // SAFETY: this function is called from C with a valid pointer for the offset
+    let pos: usize = match unsafe { *offset }.try_into() {
+        Ok(pos) => pos,
+        Err(e) => return Into::<Error>::into(e).to_errno(),
+    };
+
+    // Get the data supposed to be sent to userspace
+    let str = match target() {
+        Ok(str) => str,
+        Err(e) => return e.to_errno(),
+    };
+    let bytes = str.as_bytes();
+
+    // Only continue if there are still bytes to read
+    if pos >= bytes.len() || count == 0 {
+        return 0;
+    }
+
+    // Limit the count to the remaining length of the bytes starting from pos
+    let count = core::cmp::min(count, bytes.len().saturating_sub(pos));
+
+    // Write to userspace
+    let mut writer = UserSlice::new(ptr, count).writer();
+    if let Err(e) = writer.write_slice(&bytes[pos..pos + count]) {
+        return e.to_errno();
+    }
+
+    let count: i64 = match count.try_into() {
+        Ok(count) => count,
+        Err(e) => return Into::<Error>::into(e).to_errno(),
+    };
+
+    // SAFETY: this function is called from C with a valid pointer for the offset
+    unsafe { *offset += count };
+
+    count as _
 }
 
 /// Update stored policy or attributes

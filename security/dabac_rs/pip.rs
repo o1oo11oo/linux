@@ -10,7 +10,11 @@ use kernel::{
     alloc::Flags,
     global_lock,
     prelude::*,
-    sync::{rcu::Rcu, ProjectableGlobalLockedBy},
+    str::CString,
+    sync::{
+        rcu::{self, Rcu},
+        ProjectableGlobalLockedBy,
+    },
 };
 
 use crate::policy::{Attributions, ObjectAttributes, UserAttributes};
@@ -97,14 +101,33 @@ pub(crate) fn init() -> Result<()> {
     Ok(())
 }
 
+pub(crate) fn get_serialized_user_attrs() -> Result<CString> {
+    let guard = USER_ATTRIBUTES.lock();
+    CString::try_from_fmt(fmt!("{}", &*guard))
+}
+
 pub(crate) fn set_user_attributes(attrs: UserAttributes) {
     let mut guard = USER_ATTRIBUTES.lock();
     *guard = attrs;
 }
 
+pub(crate) fn get_serialized_object_attrs() -> Result<CString> {
+    let guard = OBJECT_ATTRIBUTES.lock();
+    CString::try_from_fmt(fmt!("{}", &*guard))
+}
+
 pub(crate) fn set_object_attributes(attrs: ObjectAttributes) {
     let mut guard = OBJECT_ATTRIBUTES.lock();
     *guard = attrs;
+}
+
+pub(crate) fn get_serialized_env_attrs() -> Result<CString> {
+    let rcu_guard = rcu::read_lock();
+    if let Some(attrs) = ENV_ATTRIBUTES.dereference(&rcu_guard) {
+        CString::try_from_fmt(fmt!("{}", attrs))
+    } else {
+        CString::new()
+    }
 }
 
 pub(crate) fn set_env_attributes(attrs: Attributions) -> Result<()> {

@@ -9,6 +9,7 @@ use kernel::{
     fs::File,
     hash::HashMap,
     prelude::*,
+    str::CString,
     sync::{
         global_lock,
         rcu::{self, Rcu},
@@ -67,6 +68,15 @@ pub(crate) fn init() -> Result<()> {
     pr_info!("Policy initialized");
 
     Ok(())
+}
+
+pub(crate) fn get_serialized_policy() -> Result<CString> {
+    let rcu_guard = rcu::read_lock();
+    if let Some(policy) = POLICY.dereference(&rcu_guard) {
+        CString::try_from_fmt(fmt!("{}", policy))
+    } else {
+        CString::new()
+    }
 }
 
 pub(crate) fn set_policy(policy: Policy) -> Result<()> {

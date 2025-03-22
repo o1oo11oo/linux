@@ -52,7 +52,11 @@
 //! [AddObjectAttribution]: PolicyChange::AddObjectAttribution
 //! [RemoveObjectAttribution]: PolicyChange::RemoveObjectAttribution
 
-use core::{num::NonZeroU32, str::FromStr};
+use core::{
+    fmt::{Display, Formatter},
+    num::NonZeroU32,
+    str::FromStr,
+};
 
 use kernel::{alloc::Flags, prelude::*};
 
@@ -104,6 +108,23 @@ impl FromStr for Policy {
     }
 }
 
+impl Display for Policy {
+    fn fmt(&self, f: &mut Formatter<'_>) -> core::fmt::Result {
+        let mut first = true;
+        for (op, rules) in self.map.iter().enumerate().filter(|(_, v)| !v.is_empty()) {
+            for rule in rules {
+                if !first {
+                    write!(f, ";\n")?;
+                }
+                first = false;
+                write!(f, "{}:= {}", op, rule)?;
+            }
+        }
+
+        Ok(())
+    }
+}
+
 #[derive(Debug)]
 pub(crate) struct Rule {
     pub(crate) pre: PreCondition,
@@ -126,6 +147,16 @@ impl FromStr for Rule {
                 post: post.parse()?,
             }),
         }
+    }
+}
+
+impl Display for Rule {
+    fn fmt(&self, f: &mut Formatter<'_>) -> core::fmt::Result {
+        write!(f, "{}", self.pre)?;
+        if !self.post.changes.is_empty() {
+            write!(f, " => {}", self.post)?;
+        }
+        Ok(())
     }
 }
 
@@ -155,6 +186,12 @@ impl FromStr for PreCondition {
     }
 }
 
+impl Display for PreCondition {
+    fn fmt(&self, f: &mut Formatter<'_>) -> core::fmt::Result {
+        write!(f, "{}", self.formula)
+    }
+}
+
 #[derive(Debug)]
 pub(crate) struct PostCondition {
     pub(crate) changes: KVec<PolicyChange>,
@@ -176,6 +213,21 @@ impl FromStr for PostCondition {
             changes.push(change.parse()?, GFP_KERNEL)?;
         }
         Ok(Self { changes })
+    }
+}
+
+impl Display for PostCondition {
+    fn fmt(&self, f: &mut Formatter<'_>) -> core::fmt::Result {
+        let Some(change) = self.changes.first() else {
+            return Ok(());
+        };
+        write!(f, "{}", change)?;
+
+        for change in self.changes.iter().skip(1) {
+            write!(f, ", {}", change)?;
+        }
+
+        Ok(())
     }
 }
 
@@ -204,6 +256,17 @@ impl FromStr for PolicyChange {
     }
 }
 
+impl Display for PolicyChange {
+    fn fmt(&self, f: &mut Formatter<'_>) -> core::fmt::Result {
+        match self {
+            PolicyChange::AddUserAttribution(attr) => write!(f, "+u {}", attr),
+            PolicyChange::RemoveUserAttribution(attr) => write!(f, "-u {}", attr),
+            PolicyChange::AddObjectAttribution(attr) => write!(f, "+o {}", attr),
+            PolicyChange::RemoveObjectAttribution(attr) => write!(f, "-o {}", attr),
+        }
+    }
+}
+
 #[derive(Debug)]
 pub(crate) struct AddAttribution {
     pub(crate) entity: usize,
@@ -225,6 +288,12 @@ impl FromStr for AddAttribution {
     }
 }
 
+impl Display for AddAttribution {
+    fn fmt(&self, f: &mut Formatter<'_>) -> core::fmt::Result {
+        write!(f, "{}: {}={}", self.entity, self.identifier, self.value)
+    }
+}
+
 #[derive(Debug)]
 pub(crate) struct RemoveAttribution {
     pub(crate) entity: usize,
@@ -240,6 +309,12 @@ impl FromStr for RemoveAttribution {
             entity: e.trim().parse()?,
             identifier: i.trim().parse()?,
         })
+    }
+}
+
+impl Display for RemoveAttribution {
+    fn fmt(&self, f: &mut Formatter<'_>) -> core::fmt::Result {
+        write!(f, "{}: {}", self.entity, self.identifier)
     }
 }
 
@@ -314,6 +389,21 @@ impl FromStr for UserAttributes {
     }
 }
 
+impl Display for UserAttributes {
+    fn fmt(&self, f: &mut Formatter<'_>) -> core::fmt::Result {
+        let mut first = true;
+        for (entity, attr) in self.map.iter().enumerate().filter(|(_, v)| !v.is_empty()) {
+            if !first {
+                write!(f, ",\n")?;
+            }
+            first = false;
+            write!(f, "{}: {}", entity, attr)?;
+        }
+
+        Ok(())
+    }
+}
+
 /// Top level data type storing all object attributions
 ///
 /// Maps inode numbers (shifted in range by subtracting a constant) to a
@@ -379,6 +469,21 @@ impl FromStr for ObjectAttributes {
     }
 }
 
+impl Display for ObjectAttributes {
+    fn fmt(&self, f: &mut Formatter<'_>) -> core::fmt::Result {
+        let mut first = true;
+        for (entity, attr) in self.map.iter().enumerate().filter(|(_, v)| !v.is_empty()) {
+            if !first {
+                write!(f, ",\n")?;
+            }
+            first = false;
+            write!(f, "{}: {}", entity + MIN_INODE, attr)?;
+        }
+
+        Ok(())
+    }
+}
+
 #[derive(Debug)]
 pub(crate) struct Attributions {
     map: KVec<Option<NonZeroU32>>,
@@ -425,6 +530,10 @@ impl Attributions {
 
         Ok(())
     }
+
+    fn is_empty(&self) -> bool {
+        self.map.iter().all(|v| v.is_none())
+    }
 }
 
 impl FromStr for Attributions {
@@ -452,5 +561,25 @@ impl FromStr for Attributions {
         }
 
         Ok(Self { map: attrs })
+    }
+}
+
+impl Display for Attributions {
+    fn fmt(&self, f: &mut Formatter<'_>) -> core::fmt::Result {
+        let mut first = true;
+        for (i, v) in self
+            .map
+            .iter()
+            .enumerate()
+            .filter_map(|(i, v)| v.and_then(|v| Some((i, v))))
+        {
+            if !first {
+                write!(f, " & ")?;
+            }
+            first = false;
+            write!(f, "{}={}", i, v)?;
+        }
+
+        Ok(())
     }
 }

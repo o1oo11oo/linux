@@ -15,9 +15,13 @@ struct dentry *dabac_rs_policy_file;
 // represented as UserPtr (usize) in Rust. Since there is no unsafe function to
 // create a UserPtr from an actual pointer, this is probably not the worst, but
 // still a bit shady.
+extern ssize_t dabac_rs_read_user_attr(struct file *filp, char __user *buffer, size_t count, loff_t *off);
 extern ssize_t dabac_rs_update_user_attr(struct file *filp, const char __user *buffer, size_t len, loff_t *off);
+extern ssize_t dabac_rs_read_object_attr(struct file *filp, char __user *buffer, size_t count, loff_t *off);
 extern ssize_t dabac_rs_update_object_attr(struct file *filp, const char __user *buffer, size_t len, loff_t *off);
+extern ssize_t dabac_rs_read_env_attr(struct file *filp, char __user *buffer, size_t count, loff_t *off);
 extern ssize_t dabac_rs_update_env_attr(struct file *filp, const char __user *buffer, size_t len, loff_t *off);
+extern ssize_t dabac_rs_read_policy(struct file *filp, char __user *buffer, size_t count, loff_t *off);
 extern ssize_t dabac_rs_update_policy(struct file *filp, const char __user *buffer, size_t len, loff_t *off);
 
 static int dabac_rs_open(struct inode *i, struct file *f)
@@ -28,21 +32,25 @@ static int dabac_rs_open(struct inode *i, struct file *f)
 
 static const struct file_operations user_attr_fops = {
 	.open = dabac_rs_open,
+	.read = dabac_rs_read_user_attr,
 	.write = dabac_rs_update_user_attr,
 };
 
 static const struct file_operations obj_attr_fops = {
 	.open = dabac_rs_open,
+	.read = dabac_rs_read_object_attr,
 	.write = dabac_rs_update_object_attr,
 };
 
 static const struct file_operations env_attr_fops = {
 	.open = dabac_rs_open,
+	.read = dabac_rs_read_env_attr,
 	.write = dabac_rs_update_env_attr,
 };
 
 static const struct file_operations policy_fops = {
 	.open = dabac_rs_open,
+	.read = dabac_rs_read_policy,
 	.write = dabac_rs_update_policy,
 };
 

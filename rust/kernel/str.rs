@@ -825,6 +825,15 @@ pub struct CString {
 }
 
 impl CString {
+    /// Creates an empty [`CString`]
+    pub fn new() -> Result<Self, Error> {
+        let mut buf = KVec::new();
+        buf.push(b'\0', GFP_KERNEL)?;
+
+        // INVARIANT: We wrote exactly the one required `NUL` terminator.
+        Ok(Self { buf })
+    }
+
     /// Creates an instance of [`CString`] from the given formatted arguments.
     pub fn try_from_fmt(args: fmt::Arguments<'_>) -> Result<Self, Error> {
         // Calculate the size needed (formatted string plus `NUL` terminator).

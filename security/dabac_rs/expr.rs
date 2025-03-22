@@ -26,7 +26,11 @@
 //!
 //! [`Policy`]: crate::policy::Policy
 
-use core::{num::NonZeroU32, str::FromStr};
+use core::{
+    fmt::{Display, Formatter},
+    num::NonZeroU32,
+    str::FromStr,
+};
 
 use kernel::{kvec, prelude::*};
 
@@ -68,6 +72,21 @@ impl FromStr for Expression {
     }
 }
 
+impl Display for Expression {
+    fn fmt(&self, f: &mut Formatter<'_>) -> core::fmt::Result {
+        let Some(clause) = self.clauses.first() else {
+            return Ok(());
+        };
+        write!(f, "{}", clause)?;
+
+        for clause in self.clauses.iter().skip(1) {
+            write!(f, " | {}", clause)?;
+        }
+
+        Ok(())
+    }
+}
+
 #[derive(Debug)]
 struct Conjunction {
     clauses: KVec<Literal>,
@@ -104,6 +123,21 @@ impl FromStr for Conjunction {
     }
 }
 
+impl Display for Conjunction {
+    fn fmt(&self, f: &mut Formatter<'_>) -> core::fmt::Result {
+        let Some(clause) = self.clauses.first() else {
+            return Ok(());
+        };
+        write!(f, "{}", clause)?;
+
+        for clause in self.clauses.iter().skip(1) {
+            write!(f, " & {}", clause)?;
+        }
+
+        Ok(())
+    }
+}
+
 #[derive(Debug)]
 enum Literal {
     Identity(Term),
@@ -136,11 +170,30 @@ impl FromStr for Literal {
     }
 }
 
+impl Display for Literal {
+    fn fmt(&self, f: &mut Formatter<'_>) -> core::fmt::Result {
+        match self {
+            Literal::Identity(term) => write!(f, "{}", term),
+            Literal::Negation(term) => write!(f, "!{}", term),
+        }
+    }
+}
+
 #[derive(Debug)]
 enum Operation {
     Less,
     Equals,
     Greater,
+}
+
+impl Display for Operation {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        match self {
+            Operation::Less => write!(f, "<"),
+            Operation::Equals => write!(f, "="),
+            Operation::Greater => write!(f, ">"),
+        }
+    }
 }
 
 #[derive(Debug)]
@@ -205,6 +258,12 @@ impl FromStr for Term {
     }
 }
 
+impl Display for Term {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        write!(f, "{}{}{}", self.left, self.op, self.right)
+    }
+}
+
 #[derive(Debug)]
 enum Value {
     UserAttr(usize),
@@ -240,6 +299,17 @@ impl FromStr for Value {
             Some(("e", num)) => Ok(Value::EnvAttr(num.trim().parse()?)),
             Some(("c", num)) => Ok(Value::Constant(num.trim().parse()?)),
             Some(_) => Err(EINVAL),
+        }
+    }
+}
+
+impl Display for Value {
+    fn fmt(&self, f: &mut Formatter<'_>) -> core::fmt::Result {
+        match self {
+            Value::UserAttr(identifier) => write!(f, "u{}", identifier),
+            Value::ObjectAttr(identifier) => write!(f, "o{}", identifier),
+            Value::EnvAttr(identifier) => write!(f, "e{}", identifier),
+            Value::Constant(value) => write!(f, "c{}", value),
         }
     }
 }

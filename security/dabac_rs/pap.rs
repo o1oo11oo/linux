@@ -6,9 +6,13 @@
 
 use core::str;
 
-use kernel::prelude::*;
+use kernel::{prelude::*, str::CString};
 
 use crate::{pdp, pip};
+
+pub(crate) fn read_user_attr() -> Result<CString> {
+    pip::get_serialized_user_attrs()
+}
 
 pub(crate) fn update_user_attr(attrs: &[u8]) -> Result<()> {
     let attrs = str::from_utf8(attrs)?.parse()?;
@@ -16,6 +20,10 @@ pub(crate) fn update_user_attr(attrs: &[u8]) -> Result<()> {
     pip::set_user_attributes(attrs);
 
     Ok(())
+}
+
+pub(crate) fn read_object_attr() -> Result<CString> {
+    pip::get_serialized_object_attrs()
 }
 
 pub(crate) fn update_object_attr(attrs: &[u8]) -> Result<()> {
@@ -26,12 +34,20 @@ pub(crate) fn update_object_attr(attrs: &[u8]) -> Result<()> {
     Ok(())
 }
 
+pub(crate) fn read_env_attr() -> Result<CString> {
+    pip::get_serialized_env_attrs()
+}
+
 pub(crate) fn update_env_attr(attrs: &[u8]) -> Result<()> {
     let attrs = str::from_utf8(attrs)?.parse()?;
     pr_info!("Updating environmental attributes to: {attrs:?}");
     pip::set_env_attributes(attrs)?;
 
     Ok(())
+}
+
+pub(crate) fn read_policy() -> Result<CString> {
+    pdp::get_serialized_policy()
 }
 
 pub(crate) fn update_policy(policy: &[u8]) -> Result<()> {
