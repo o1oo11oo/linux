@@ -48,9 +48,9 @@ impl Expression {
         object_attr: &Attributions,
         env_attr: &Attributions,
     ) -> bool {
-        self.clauses.iter().fold(false, |acc, clause| {
-            acc || clause.evaluate(user_attr, object_attr, env_attr)
-        })
+        self.clauses
+            .iter()
+            .any(|clause| clause.evaluate(user_attr, object_attr, env_attr))
     }
 }
 
@@ -99,9 +99,9 @@ impl Conjunction {
         object_attr: &Attributions,
         env_attr: &Attributions,
     ) -> bool {
-        self.clauses.iter().fold(true, |acc, clause| {
-            acc && clause.evaluate(user_attr, object_attr, env_attr)
-        })
+        self.clauses
+            .iter()
+            .all(|clause| clause.evaluate(user_attr, object_attr, env_attr))
     }
 }
 

@@ -23,18 +23,18 @@
 //! PostCondition = PostCondition "," PostCondition | PolicyChange | ε
 //! PolicyChange = AddUserAttribution | RemoveUserAttribution | AddObjectAttribution | RemoveObjectAttribution
 //!
-//! AddUserAttribution = "+u" AddAttribution
-//! RemoveUserAttribution = "-u" RemoveAttribution
-//! AddObjectAttribution = "+o" AddAttribution
-//! RemoveObjectAttribution = "-o" RemoveAttribution
+//! AddToUser = "+u" AddAttribution
+//! RemoveFromUser = "-u" RemoveAttribution
+//! AddToObject = "+o" AddAttribution
+//! RemoveFromObject = "-o" RemoveAttribution
 //! AddAttribution = usize ":" AVP
 //! RemoveAttribution = usize ":" usize
 //!
-//! Attributions = AVP "&" AVP | AVP | ε
-//! AVP = usize "=" NonZeroU32
-//!
 //! UserAttributes = UserAttributes "," UserAttributes | usize ":" Attributions | ε
 //! ObjectAttributes = ObjectAttributes "," ObjectAttributes | usize ":" Attributions | ε
+//!
+//! Attributions = AVP "&" AVP | AVP | ε
+//! AVP = usize "=" NonZeroU32
 //! ```
 //!
 //! Here's what an example policy looks like:
@@ -114,7 +114,7 @@ impl Display for Policy {
         for (op, rules) in self.map.iter().enumerate().filter(|(_, v)| !v.is_empty()) {
             for rule in rules {
                 if !first {
-                    write!(f, ";\n")?;
+                    writeln!(f, ";")?;
                 }
                 first = false;
                 write!(f, "{}:= {}", op, rule)?;
@@ -233,10 +233,10 @@ impl Display for PostCondition {
 
 #[derive(Debug)]
 pub(crate) enum PolicyChange {
-    AddUserAttribution(AddAttribution),
-    RemoveUserAttribution(RemoveAttribution),
-    AddObjectAttribution(AddAttribution),
-    RemoveObjectAttribution(RemoveAttribution),
+    AddToUser(AddAttribution),
+    RemoveFromUser(RemoveAttribution),
+    AddToObject(AddAttribution),
+    RemoveFromObject(RemoveAttribution),
 }
 
 impl FromStr for PolicyChange {
@@ -247,10 +247,10 @@ impl FromStr for PolicyChange {
 
         match s.trim().split_at_checked(2) {
             None => Err(EINVAL),
-            Some(("+u", s)) => Ok(AddUserAttribution(s.parse()?)),
-            Some(("-u", s)) => Ok(RemoveUserAttribution(s.parse()?)),
-            Some(("+o", s)) => Ok(AddObjectAttribution(s.parse()?)),
-            Some(("-o", s)) => Ok(RemoveObjectAttribution(s.parse()?)),
+            Some(("+u", s)) => Ok(AddToUser(s.parse()?)),
+            Some(("-u", s)) => Ok(RemoveFromUser(s.parse()?)),
+            Some(("+o", s)) => Ok(AddToObject(s.parse()?)),
+            Some(("-o", s)) => Ok(RemoveFromObject(s.parse()?)),
             Some(_) => Err(EINVAL),
         }
     }
@@ -259,10 +259,10 @@ impl FromStr for PolicyChange {
 impl Display for PolicyChange {
     fn fmt(&self, f: &mut Formatter<'_>) -> core::fmt::Result {
         match self {
-            PolicyChange::AddUserAttribution(attr) => write!(f, "+u {}", attr),
-            PolicyChange::RemoveUserAttribution(attr) => write!(f, "-u {}", attr),
-            PolicyChange::AddObjectAttribution(attr) => write!(f, "+o {}", attr),
-            PolicyChange::RemoveObjectAttribution(attr) => write!(f, "-o {}", attr),
+            PolicyChange::AddToUser(attr) => write!(f, "+u {}", attr),
+            PolicyChange::RemoveFromUser(attr) => write!(f, "-u {}", attr),
+            PolicyChange::AddToObject(attr) => write!(f, "+o {}", attr),
+            PolicyChange::RemoveFromObject(attr) => write!(f, "-o {}", attr),
         }
     }
 }
@@ -394,7 +394,7 @@ impl Display for UserAttributes {
         let mut first = true;
         for (entity, attr) in self.map.iter().enumerate().filter(|(_, v)| !v.is_empty()) {
             if !first {
-                write!(f, ",\n")?;
+                writeln!(f, ",")?;
             }
             first = false;
             write!(f, "{}: {}", entity, attr)?;
@@ -474,7 +474,7 @@ impl Display for ObjectAttributes {
         let mut first = true;
         for (entity, attr) in self.map.iter().enumerate().filter(|(_, v)| !v.is_empty()) {
             if !first {
-                write!(f, ",\n")?;
+                writeln!(f, ",")?;
             }
             first = false;
             write!(f, "{}: {}", entity + MIN_INODE, attr)?;

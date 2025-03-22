@@ -210,7 +210,7 @@ fn resolve(operation: usize, uid: usize, object: usize) -> Result<bool> {
 }
 
 fn is_protected(name: &CStr) -> bool {
-    name.starts_with(&PROTECTED_PATH)
+    name.starts_with(PROTECTED_PATH)
 }
 
 fn get_op_from_mask(mask: i32) -> Result<usize> {

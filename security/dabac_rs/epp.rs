@@ -22,24 +22,24 @@ pub(crate) fn execute_postcondition(
 
     for change in &post.changes {
         match change {
-            PolicyChange::AddUserAttribution(addition) => pip::add_user_attribution(
+            PolicyChange::AddToUser(addition) => pip::add_user_attribution(
                 user_attr,
                 addition.entity,
                 addition.identifier,
                 addition.value,
                 flags,
             )?,
-            PolicyChange::RemoveUserAttribution(removal) => {
+            PolicyChange::RemoveFromUser(removal) => {
                 pip::remove_user_attribution(user_attr, removal.entity, removal.identifier, flags)?
             }
-            PolicyChange::AddObjectAttribution(addition) => pip::add_object_attribution(
+            PolicyChange::AddToObject(addition) => pip::add_object_attribution(
                 object_attr,
                 addition.entity,
                 addition.identifier,
                 addition.value,
                 flags,
             )?,
-            PolicyChange::RemoveObjectAttribution(removal) => pip::remove_object_attribution(
+            PolicyChange::RemoveFromObject(removal) => pip::remove_object_attribution(
                 object_attr,
                 removal.entity,
                 removal.identifier,
