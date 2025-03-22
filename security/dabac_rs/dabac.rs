@@ -4,6 +4,10 @@
 //!
 //! Rust-based LSM that implements a dynamic ABAC policy.
 
+// `split_at_checked()` has only been stable since Rust 1.80.0 but the kernel
+// currently uses 1.78.0. Since I use latest stable ignore this for now.
+#![allow(clippy::incompatible_msrv)]
+
 mod bindings;
 mod epp;
 mod expr;
