@@ -26,10 +26,6 @@ use crate::{pap, pdp};
 /// The name the LSM gets registered under.
 const NAME: &CStr = c_str!("dabac_rs");
 
-/// The amount of hooks that get registered. Easier to just define this here
-/// than getting it from the array.
-const SECURITY_HOOK_LIST_LEN: usize = 1;
-
 /// Wrapper to be able to use `lsm_id` in a static context.
 #[repr(transparent)]
 struct LsmId(Opaque<bindings::lsm_id>);
@@ -39,19 +35,19 @@ struct LsmId(Opaque<bindings::lsm_id>);
 unsafe impl Sync for LsmId {}
 
 /// Wrapper to be able to use `lsm_info` in a static context.
-// Needs to be aligned to size_of::<kernel::ffi::c_ulong>(), but Rust attributes
-// cannot express this and even statically setting it to 8 cannot be combined
-// with repr(transparent).
+// Needs to be aligned to `size_of::<kernel::ffi::c_ulong>()`, but Rust
+// attributes cannot express this and even statically setting it to 8 cannot be
+// combined with `repr(transparent)`.
 #[repr(transparent)]
 struct LsmInfo(Opaque<bindings::lsm_info>);
 
 // SAFETY: There is only a static instance and in that one the pointer fields
-// points to an immutable C string and the init function defined here.
+// point to an immutable C string and the init function defined here.
 unsafe impl Sync for LsmInfo {}
 
 /// Wrapper to be able to use `security_hook_list` in a static context.
 #[repr(transparent)]
-struct SecurityHookList(Opaque<[bindings::security_hook_list; SECURITY_HOOK_LIST_LEN]>);
+struct SecurityHookList([Opaque<bindings::security_hook_list>; 1]);
 
 // SAFETY: There is only a static instance, which is only modified from C during
 // LSM initialization
@@ -86,17 +82,28 @@ static DABAC_RS_LSMINFO: LsmInfo = LsmInfo(Opaque::new(bindings::lsm_info {
 unsafe extern "C" fn init() -> c_int {
     pr_info!("Rust DABAC LSM is starting...\n");
 
-    // Register hooks
-    // SAFETY: FFI call to register the hooks for the LSM, uses &raw mut to
-    // create a pointer to the static mut without creating a reference. All
-    // pointers point to statics and are therefore valid for the call.
-    unsafe {
-        bindings::security_add_hooks(
-            &raw mut DABAC_RS_HOOKS.0 as _,
-            SECURITY_HOOK_LIST_LEN as _,
-            DABAC_RS_LSMID.0.get(),
-        );
-    }
+    // Get a pointer to the static mut without creating a reference to first get
+    // the amount of hooks and then pass them to C to register them. This first
+    // casts the pointer to one to the slice so that `<*mut [T]>::len()` can be
+    // used, before later casting to only the pointer to the first element which
+    // C expects for the function call.
+    // SAFETY: during init nothing else can access the static mut.
+    // `Opaque::get()` or `Opaque::raw_get()` cannot be used because they only
+    // wrap single items, but the pointer needs to be valid for the whole array.
+    // Since all types are `repr(transparent)` casting the pointer is valid.
+    let hooks = unsafe { &raw mut DABAC_RS_HOOKS.0 as *mut [_] };
+
+    // Get the amount of hooks contained in the array without creating a
+    // temporary reference to the static mut.
+    let Ok(count) = hooks.len().try_into() else {
+        return EINVAL.to_errno();
+    };
+
+    // Register the hooks
+    // SAFETY: FFI call to register the hooks for the LSM. All pointers point to
+    // statics which are only accessed from this init and are therefore valid
+    // for the call.
+    unsafe { bindings::security_add_hooks(hooks as _, count, DABAC_RS_LSMID.0.get()) };
 
     // Call the normal init function for further component initialization
     if let Err(e) = super::init() {
@@ -108,21 +115,23 @@ unsafe extern "C" fn init() -> c_int {
     0
 }
 
-/// List of hooks to register callbacks for. Length must match
-/// `SECURITY_HOOK_LIST_LEN`.
+/// List of hooks to register callbacks for.
+///
+/// This needs to be `static mut` since the LSM code updates the data stored
+/// here during LSM initialization.
 #[used]
 #[link_section = ".data..ro_after_init"]
 static mut DABAC_RS_HOOKS: SecurityHookList =
-    SecurityHookList(Opaque::new([bindings::security_hook_list {
+    SecurityHookList([Opaque::new(bindings::security_hook_list {
         // SAFETY: Creates an unaligned pointer to the mutable static since the
-        // `static_calls_table` is `repr(packed)`. Should be safe but Rust
-        // treats this as accessing a mutable static.
+        // `static_calls_table` is `repr(packed)`. The pointers are only used
+        // from C code.
         scalls: unsafe { &raw mut bindings::static_calls_table.file_permission as _ },
         hook: bindings::security_list_options {
             file_permission: Some(file_permission),
         },
         lsmid: DABAC_RS_LSMID.0.get(),
-    }]));
+    })]);
 
 /// Callback for the `file_permission` hook, gets called every time a file is
 /// read or written.
