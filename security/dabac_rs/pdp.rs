@@ -38,7 +38,7 @@ static POLICY: ProjectableGlobalLockedBy<Rcu<KBox<Policy>>, POLICY_WRITE_GUARD> 
     ProjectableGlobalLockedBy::new(Rcu::null());
 
 /// Initialize the PDP during LSM initialization
-pub(crate) fn init() -> Result<()> {
+pub(crate) fn init() -> Result {
     // SAFETY: All initializers are called exactly once.
     unsafe {
         POLICY_WRITE_GUARD.init();
@@ -79,7 +79,7 @@ pub(crate) fn get_serialized_policy() -> Result<CString> {
     }
 }
 
-pub(crate) fn set_policy(policy: Policy) -> Result<()> {
+pub(crate) fn set_policy(policy: Policy) -> Result {
     let mut guard = POLICY_WRITE_GUARD.lock();
     let mut policy_writer = POLICY.as_mut(&mut guard);
     let policy = KBox::new(policy, GFP_KERNEL)?;

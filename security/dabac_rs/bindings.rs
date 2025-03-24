@@ -136,13 +136,8 @@ unsafe extern "C" fn file_permission(file: *mut bindings::file, mask: c_int) -> 
     let file = unsafe { LocalFile::from_raw_file(file) };
 
     match pdp::file_permission(file, mask) {
-        Ok(allowed) => {
-            if allowed {
-                0
-            } else {
-                EPERM.to_errno()
-            }
-        }
+        Ok(true) => 0,
+        Ok(false) => EPERM.to_errno(),
         Err(e) => e.to_errno(),
     }
 }
@@ -352,7 +347,7 @@ fn read_str(
 /// represented as UserPtr (usize) in Rust. Since there is no unsafe function to
 /// create a UserPtr from an actual pointer, this is probably not the worst, but
 /// still a bit shady.
-fn update_policy_or_attrs(target: fn(&[u8]) -> Result<()>, ptr: UserPtr, length: c_ulong) -> c_int {
+fn update_policy_or_attrs(target: fn(&[u8]) -> Result, ptr: UserPtr, length: c_ulong) -> c_int {
     let mut buf = KVec::new();
 
     if let Err(e) = UserSlice::new(ptr, length).read_all(&mut buf, GFP_KERNEL) {

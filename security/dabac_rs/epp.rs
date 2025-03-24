@@ -17,7 +17,7 @@ pub(crate) fn execute_postcondition(
     user_attr: &mut UserAttributes,
     object_attr: &mut ObjectAttributes,
     flags: Flags,
-) -> Result<()> {
+) -> Result {
     pr_info!("Executing post-condition: {post:?}");
 
     for change in &post.changes {

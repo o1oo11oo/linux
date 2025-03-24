@@ -40,7 +40,7 @@ pub(crate) static ENV_ATTRIBUTES: ProjectableGlobalLockedBy<
 > = ProjectableGlobalLockedBy::new(Rcu::null());
 
 /// Initialize the PDP during LSM initialization
-pub(crate) fn init() -> Result<()> {
+pub(crate) fn init() -> Result {
     // SAFETY: All initializers are called exactly once.
     unsafe {
         USER_ATTRIBUTES.init();
@@ -130,7 +130,7 @@ pub(crate) fn get_serialized_env_attrs() -> Result<CString> {
     }
 }
 
-pub(crate) fn set_env_attributes(attrs: Attributions) -> Result<()> {
+pub(crate) fn set_env_attributes(attrs: Attributions) -> Result {
     let mut guard = ENV_ATTR_WRITE_GUARD.lock();
     let mut env_attr_writer = ENV_ATTRIBUTES.as_mut(&mut guard);
     let attrs = KBox::new(attrs, GFP_KERNEL)?;
@@ -145,7 +145,7 @@ pub(crate) fn add_user_attribution(
     identifier: usize,
     value: NonZeroU32,
     flags: Flags,
-) -> Result<()> {
+) -> Result {
     let entry = user_attr.get_mut(uid, flags)?;
     entry.add(identifier, value, flags)
 }
@@ -155,7 +155,7 @@ pub(crate) fn remove_user_attribution(
     uid: usize,
     identifier: usize,
     flags: Flags,
-) -> Result<()> {
+) -> Result {
     let entry = user_attr.get_mut(uid, flags)?;
     entry.remove(identifier, flags)
 }
@@ -166,7 +166,7 @@ pub(crate) fn add_object_attribution(
     identifier: usize,
     value: NonZeroU32,
     flags: Flags,
-) -> Result<()> {
+) -> Result {
     let entry = object_attr.get_mut(inode, flags)?;
     entry.add(identifier, value, flags)
 }
@@ -176,7 +176,7 @@ pub(crate) fn remove_object_attribution(
     inode: usize,
     identifier: usize,
     flags: Flags,
-) -> Result<()> {
+) -> Result {
     let entry = object_attr.get_mut(inode, flags)?;
     entry.remove(identifier, flags)
 }
