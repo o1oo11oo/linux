@@ -4,11 +4,10 @@
 //!
 //! Rust-based LSM that implements a dynamic ABAC policy.
 
-// `slice_ptr_len` and `split_at_checked` have only been stable since Rust
-// 1.79.0 and 1.80.0 respectively, but the kernel currently uses 1.78.0. Since I
-// use latest stable ignore this for now. Setting the feature gates instead
-// would be nicer, but this does not work because of a clippy bug, see
-// https://github.com/rust-lang/rust-clippy/issues/14425
+// `split_at_checked` has only been stable since Rust 1.80.0, but the kernel
+// currently uses 1.78.0. Since I use latest stable ignore this for now. Setting
+// the feature gates instead would be nicer, but this does not work because of a
+// clippy bug, see https://github.com/rust-lang/rust-clippy/issues/14425
 #![allow(clippy::incompatible_msrv)]
 
 mod bindings;
