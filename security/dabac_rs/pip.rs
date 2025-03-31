@@ -131,10 +131,10 @@ pub(crate) fn get_serialized_env_attrs() -> Result<CString> {
 }
 
 pub(crate) fn set_env_attributes(attrs: Attributions) -> Result {
+    let attrs = KBox::new(attrs, GFP_KERNEL)?;
     let mut guard = ENV_ATTR_WRITE_GUARD.lock();
     let mut env_attr_writer = ENV_ATTRIBUTES.as_mut(&mut guard);
-    let attrs = KBox::new(attrs, GFP_KERNEL)?;
-    env_attr_writer.as_mut().read_copy_update(|_| Some(attrs));
+    env_attr_writer.as_mut().replace(attrs);
 
     Ok(())
 }

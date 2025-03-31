@@ -80,10 +80,10 @@ pub(crate) fn get_serialized_policy() -> Result<CString> {
 }
 
 pub(crate) fn set_policy(policy: Policy) -> Result {
+    let policy = KBox::new(policy, GFP_KERNEL)?;
     let mut guard = POLICY_WRITE_GUARD.lock();
     let mut policy_writer = POLICY.as_mut(&mut guard);
-    let policy = KBox::new(policy, GFP_KERNEL)?;
-    policy_writer.as_mut().read_copy_update(|_| Some(policy));
+    policy_writer.as_mut().replace(policy);
 
     Ok(())
 }
