@@ -13,28 +13,33 @@
 //! are tried, the post-conditions of the ones evaluating to true are executed
 //! in order of their definition.
 //!
-//! The policy and attributions are described by the following EBNF:
+//! The policy and attributions are described by the following BNF:
 //!
-//! ```EBNF
-//! Policy = Rule ";" Rule | Rule | ε
-//! Rule = usize := PreCondition "=>" PostCondition | PreCondition
+//! ```BNF
+//! Policy ::= Rule ";" Rule | Rule | ε
+//! Rule ::= RuleIdentifier ":=" PreCondition "=>" PostCondition | RuleIdentifier ":=" PreCondition
 //!
-//! PreCondition = Expression
-//! PostCondition = PostCondition "," PostCondition | PolicyChange | ε
-//! PolicyChange = AddUserAttribution | RemoveUserAttribution | AddObjectAttribution | RemoveObjectAttribution
+//! UserAttributes ::= UserAttributes "," UserAttributes | EntityIdentifier ":" Attributions | ε
+//! ObjectAttributes ::= ObjectAttributes "," ObjectAttributes | EntityIdentifier ":" Attributions | ε
 //!
-//! AddToUser = "+u" AddAttribution
-//! RemoveFromUser = "-u" RemoveAttribution
-//! AddToObject = "+o" AddAttribution
-//! RemoveFromObject = "-o" RemoveAttribution
-//! AddAttribution = usize ":" AVP
-//! RemoveAttribution = usize ":" usize
+//! PreCondition ::= Expression
+//! PostCondition ::= PostCondition "," PostCondition | PolicyChange | ε
+//! PolicyChange ::= AddUserAttribution | RemoveUserAttribution | AddObjectAttribution | RemoveObjectAttribution
 //!
-//! UserAttributes = UserAttributes "," UserAttributes | usize ":" Attributions | ε
-//! ObjectAttributes = ObjectAttributes "," ObjectAttributes | usize ":" Attributions | ε
+//! AddUserAttribution ::= "+u" AddAttribution
+//! RemoveUserAttribution ::= "-u" RemoveAttribution
+//! AddObjectAttribution ::= "+o" AddAttribution
+//! RemoveObjectAttribution ::= "-o" RemoveAttribution
+//! AddAttribution ::= EntityIdentifier ":" AVP
+//! RemoveAttribution ::= EntityIdentifier ":" AttributeIdentifier
 //!
-//! Attributions = AVP "&" AVP | AVP | ε
-//! AVP = usize "=" NonZeroU32
+//! Attributions ::= AVP "&" AVP | AVP | ε
+//! AVP ::= AttributeIdentifier "=" AttributeValue
+//!
+//! RuleIdentifier ::= usize
+//! EntityIdentifier ::= usize
+//! AttributeIdentifier ::= usize
+//! AttributeValue ::= NonZeroU32
 //! ```
 //!
 //! Here's what an example policy looks like:

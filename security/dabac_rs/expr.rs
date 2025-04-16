@@ -9,14 +9,16 @@
 //!
 //! Formulas can be parsed from [`str`] using [`str::parse`], errors during
 //! parsing result in [EINVAL]. The grammar is kept simple to simplifiy parsing.
-//! Whitespace is ignored. Expression are discribed by the following EBNF:
+//! Whitespace is ignored. Expression are discribed by the following BNF:
 //!
-//! ```EBNF
-//! Expression = Expression "|" Expression | Conjunction | ε
-//! Conjunction = Conjunction "&" Conjunction | Literal | ε
-//! Literal = Term | "!" Term
-//! Term = Value "<" Value | Value "=" Value | Value ">" Value
-//! Value = "u" usize | "o" usize | "e" usize | "c" NonZeroU32
+//! ```BNF
+//! Expression ::= Expression "|" Expression | Conjunction | ε
+//! Conjunction ::= Conjunction "&" Conjunction | Literal | ε
+//! Literal ::= Term | "!" Term
+//! Term ::= Value "<" Value | Value "=" Value | Value ">" Value
+//! Value ::= "u" AttributeIdentifier | "o" AttributeIdentifier | "e" AttributeIdentifier | "c" AttributeValue
+//! AttributeIdentifier ::= usize
+//! AttributeValue ::= NonZeroU32
 //! ```
 //!
 //! Note that values can either be constants (starting with `"c"`) or
