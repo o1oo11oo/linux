@@ -5,6 +5,7 @@
 //! Policy Decision Point for Rust-based DABAC LSM.
 
 use kernel::{
+    alloc::arrayvec::ArrayVec,
     bindings, c_str,
     fs::LocalFile,
     hash::HashMap,
@@ -166,7 +167,7 @@ fn resolve(operation: usize, uid: usize, object: usize) -> Result<bool> {
 
     // Collect post-conditions so that they can be executed after all the
     // pre-conditions have been checked
-    let mut post_conditions = KVec::new();
+    let mut post_conditions = ArrayVec::<_, { super::MAX_POST_CONDITIONS }>::new();
 
     pr_info!(
         "Operation {operation}: user {uid} (attr: {user_attr:?}) is trying to access {object:?} (attr: {object_attr:?})"
@@ -182,7 +183,7 @@ fn resolve(operation: usize, uid: usize, object: usize) -> Result<bool> {
         if rule.pre.evaluate(user_attr, object_attr, env_attr) {
             resolution = true;
             if !rule.post.changes.is_empty() {
-                post_conditions.push(&rule.post, GFP_NOWAIT)?;
+                post_conditions.try_push(&rule.post)?;
             }
         }
     }
