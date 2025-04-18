@@ -1,22 +1,22 @@
-use std::borrow::{Borrow, BorrowMut};
-use std::cmp;
-use std::convert::TryFrom;
-use std::fmt;
-use std::hash::{Hash, Hasher};
-use std::mem::MaybeUninit;
-use std::ops::{Deref, DerefMut};
+use core::borrow::{Borrow, BorrowMut};
+use core::cmp;
+use core::convert::TryFrom;
+use core::fmt;
+use core::hash::{Hash, Hasher};
+use core::mem::MaybeUninit;
+use core::ops::{Deref, DerefMut};
 #[cfg(feature = "std")]
-use std::path::Path;
-use std::ptr;
-use std::slice;
-use std::str;
-use std::str::FromStr;
-use std::str::Utf8Error;
+use core::path::Path;
+use core::ptr;
+use core::slice;
+use core::str;
+use core::str::FromStr;
+use core::str::Utf8Error;
 
-use crate::char::encode_utf8;
-use crate::utils::MakeMaybeUninit;
-use crate::CapacityError;
-use crate::LenUint;
+use crate::alloc::arrayvec::char::encode_utf8;
+use crate::alloc::arrayvec::utils::MakeMaybeUninit;
+use crate::alloc::arrayvec::CapacityError;
+use crate::alloc::arrayvec::LenUint;
 
 #[cfg(feature = "serde")]
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
@@ -629,8 +629,8 @@ impl<'de, const CAP: usize> Deserialize<'de> for ArrayString<CAP> {
     where
         D: Deserializer<'de>,
     {
+        use core::marker::PhantomData;
         use serde::de::{self, Visitor};
-        use std::marker::PhantomData;
 
         struct ArrayStringVisitor<const CAP: usize>(PhantomData<[u8; CAP]>);
 

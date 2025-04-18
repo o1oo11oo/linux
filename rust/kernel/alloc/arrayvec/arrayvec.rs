@@ -1,28 +1,28 @@
-use std::cmp;
-use std::iter;
-use std::mem;
-use std::ops::{Bound, Deref, DerefMut, RangeBounds};
-use std::ptr;
-use std::slice;
+use core::cmp;
+use core::iter;
+use core::mem;
+use core::ops::{Bound, Deref, DerefMut, RangeBounds};
+use core::ptr;
+use core::slice;
 
 // extra traits
-use std::borrow::{Borrow, BorrowMut};
-use std::fmt;
-use std::hash::{Hash, Hasher};
+use core::borrow::{Borrow, BorrowMut};
+use core::fmt;
+use core::hash::{Hash, Hasher};
 
 #[cfg(feature = "std")]
-use std::io;
+use core::io;
 
-use std::mem::ManuallyDrop;
-use std::mem::MaybeUninit;
+use core::mem::ManuallyDrop;
+use core::mem::MaybeUninit;
 
 #[cfg(feature = "serde")]
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 
-use crate::arrayvec_impl::ArrayVecImpl;
-use crate::errors::CapacityError;
-use crate::utils::MakeMaybeUninit;
-use crate::LenUint;
+use crate::alloc::arrayvec::arrayvec_impl::ArrayVecImpl;
+use crate::alloc::arrayvec::errors::CapacityError;
+use crate::alloc::arrayvec::utils::MakeMaybeUninit;
+use crate::alloc::arrayvec::LenUint;
 
 /// A vector with a fixed capacity.
 ///
@@ -796,13 +796,13 @@ impl<T, const CAP: usize> From<[T; CAP]> for ArrayVec<T, CAP> {
 ///
 /// ```
 /// use arrayvec::ArrayVec;
-/// use std::convert::TryInto as _;
+/// use core::convert::TryInto as _;
 ///
 /// let array: ArrayVec<_, 4> = (&[1, 2, 3] as &[_]).try_into().unwrap();
 /// assert_eq!(array.len(), 3);
 /// assert_eq!(array.capacity(), 4);
 /// ```
-impl<T, const CAP: usize> std::convert::TryFrom<&[T]> for ArrayVec<T, CAP>
+impl<T, const CAP: usize> core::convert::TryFrom<&[T]> for ArrayVec<T, CAP>
 where
     T: Clone,
 {
@@ -1334,8 +1334,8 @@ impl<'de, T: Deserialize<'de>, const CAP: usize> Deserialize<'de> for ArrayVec<T
     where
         D: Deserializer<'de>,
     {
+        use core::marker::PhantomData;
         use serde::de::{Error, SeqAccess, Visitor};
-        use std::marker::PhantomData;
 
         struct ArrayVecVisitor<'de, T: Deserialize<'de>, const CAP: usize>(
             PhantomData<(&'de (), [T; CAP])>,

@@ -5,7 +5,7 @@
 //! C header: [`include/uapi/asm-generic/errno-base.h`](srctree/include/uapi/asm-generic/errno-base.h)
 
 use crate::{
-    alloc::{layout::LayoutError, AllocError},
+    alloc::{arrayvec::CapacityError, layout::LayoutError, AllocError},
     hash::TryReserveError,
     str::CStr,
 };
@@ -199,6 +199,12 @@ impl fmt::Debug for Error {
 impl From<AllocError> for Error {
     fn from(_: AllocError) -> Error {
         code::ENOMEM
+    }
+}
+
+impl<T> From<CapacityError<T>> for Error {
+    fn from(_: CapacityError<T>) -> Error {
+        code::EINVAL
     }
 }
 

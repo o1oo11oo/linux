@@ -1,7 +1,7 @@
-use std::ptr;
-use std::slice;
+use core::ptr;
+use core::slice;
 
-use crate::CapacityError;
+use crate::alloc::arrayvec::CapacityError;
 
 /// Implements basic arrayvec methods - based on a few required methods
 /// for length and element access.
@@ -22,7 +22,7 @@ pub(crate) trait ArrayVecImpl {
     /// Return a mutable slice containing all elements of the vector.
     fn as_mut_slice(&mut self) -> &mut [Self::Item] {
         let len = self.len();
-        unsafe { std::slice::from_raw_parts_mut(self.as_mut_ptr(), len) }
+        unsafe { core::slice::from_raw_parts_mut(self.as_mut_ptr(), len) }
     }
 
     /// Return a raw pointer to the vector's buffer.

@@ -1,8 +1,8 @@
 #[cfg(feature = "std")]
-use std::any::Any;
+use core::any::Any;
 #[cfg(feature = "std")]
-use std::error::Error;
-use std::fmt;
+use core::error::Error;
+use core::fmt;
 
 /// Error value indicating insufficient capacity
 #[derive(Clone, Copy, Eq, Ord, PartialEq, PartialOrd)]

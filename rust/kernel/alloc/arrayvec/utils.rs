@@ -1,5 +1,5 @@
-use std::marker::PhantomData;
-use std::mem::MaybeUninit;
+use core::marker::PhantomData;
+use core::mem::MaybeUninit;
 
 pub(crate) struct MakeMaybeUninit<T, const N: usize>(PhantomData<fn() -> T>);
 

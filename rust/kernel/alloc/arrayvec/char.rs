@@ -58,8 +58,8 @@ pub unsafe fn encode_utf8(ch: char, ptr: *mut u8, len: usize) -> Result<usize, E
 fn test_encode_utf8() {
     // Test that all codepoints are encoded correctly
     let mut data = [0u8; 16];
-    for codepoint in 0..=(std::char::MAX as u32) {
-        if let Some(ch) = std::char::from_u32(codepoint) {
+    for codepoint in 0..=(core::char::MAX as u32) {
+        if let Some(ch) = core::char::from_u32(codepoint) {
             for elt in &mut data {
                 *elt = 0;
             }
@@ -69,7 +69,7 @@ fn test_encode_utf8() {
                 let res = encode_utf8(ch, ptr, len).ok().unwrap();
                 assert_eq!(res, ch.len_utf8());
             }
-            let string = std::str::from_utf8(&data).unwrap();
+            let string = core::str::from_utf8(&data).unwrap();
             assert_eq!(string.chars().next(), Some(ch));
         }
     }
