@@ -63,15 +63,9 @@ use core::{
     str::FromStr,
 };
 
-use kernel::{alloc::Flags, prelude::*};
+use kernel::{alloc::Flags, hash::HashMap, prelude::*};
 
 use crate::expr::Expression;
-
-/// The minimum inode possible during testing, used to move the inode range down
-///
-/// During testing, inodes of new files were very close to the beginning of this
-/// range, which is why this number was chosen.
-const MIN_INODE: usize = 0x100000;
 
 /// Main policy type, stores all [`Rule`]s with their pre- and post-conditions.
 #[derive(Debug)]
@@ -411,35 +405,43 @@ impl Display for UserAttributes {
 
 /// Top level data type storing all object attributions
 ///
-/// Maps inode numbers (shifted in range by subtracting a constant) to a
-/// collection of attributions.
+/// Maps inode numbers to a collection of attributions.
 #[derive(Debug)]
 pub(crate) struct ObjectAttributes {
-    map: KVec<Attributions>,
+    map: HashMap<usize, Attributions>,
 }
 
 impl ObjectAttributes {
-    pub(crate) const fn new() -> Self {
-        Self { map: KVec::new() }
+    /// # Safety
+    ///
+    /// The HashMap needs to be initialized before first use by calling
+    /// [`ObjectAttributes::initialize()`].
+    pub(crate) const unsafe fn new() -> Self {
+        Self {
+            // SAFETY: Will be initialized before first use according to safety contract.
+            map: unsafe { HashMap::new_uninitialized() },
+        }
+    }
+
+    pub(crate) fn initialize(&mut self) {
+        self.map.reset();
     }
 
     pub(crate) fn get(&self, inode: usize) -> &Attributions {
-        self.map
-            .get(inode - MIN_INODE)
-            .unwrap_or(&EMPTY_ATTRIBUTIONS)
+        self.map.get(&inode).unwrap_or(&EMPTY_ATTRIBUTIONS)
     }
 
     pub(crate) fn get_mut(&mut self, inode: usize, flags: Flags) -> Result<&mut Attributions> {
-        self.ensure_length(inode - MIN_INODE, flags)?;
-        self.map.get_mut(inode - MIN_INODE).ok_or(EINVAL)
+        self.ensure_length(inode, flags)?;
+        Ok(self.map.entry(inode).or_insert(Attributions::new(), flags))
     }
 
     // Since this might be called from within an RCU read critical section,
     // allow specifying the flags when it is used instead of just using
     // GFP_KERNEL by default.
     fn ensure_length(&mut self, index: usize, flags: Flags) -> Result {
-        for _ in self.map.len()..=index {
-            self.map.push(Attributions::new(), flags)?
+        if !self.map.contains_key(&index) {
+            self.map.try_reserve(1, flags)?
         }
 
         Ok(())
@@ -452,22 +454,19 @@ impl FromStr for ObjectAttributes {
     fn from_str(s: &str) -> Result<Self> {
         let s = s.trim();
         if s.is_empty() {
-            return Ok(Self { map: KVec::new() });
+            return Ok(Self {
+                map: HashMap::new(),
+            });
         }
 
         // Only allocate the "HashMap" as needed by adding new entries on demand
-        let mut attrs = KVec::new();
+        let mut attrs = HashMap::new();
         for s in s.split(',') {
             let (inode, attr) = s.trim().split_once(':').ok_or(EINVAL)?;
-            let index = inode.trim().parse::<usize>()? - MIN_INODE;
+            let index = inode.trim().parse::<usize>()?;
+            let entry = attr.trim().parse()?;
 
-            // Add new default entries if some are still missing
-            for _ in attrs.len()..=index {
-                attrs.push(Attributions::new(), GFP_KERNEL)?
-            }
-
-            let entry = attrs.get_mut(index).ok_or(EINVAL)?;
-            *entry = attr.parse()?;
+            attrs.insert_resize_if_needed(index, entry, GFP_KERNEL)?;
         }
 
         Ok(Self { map: attrs })
@@ -477,12 +476,12 @@ impl FromStr for ObjectAttributes {
 impl Display for ObjectAttributes {
     fn fmt(&self, f: &mut Formatter<'_>) -> core::fmt::Result {
         let mut first = true;
-        for (entity, attr) in self.map.iter().enumerate().filter(|(_, v)| !v.is_empty()) {
+        for (entity, attr) in self.map.iter().filter(|(_, v)| !v.is_empty()) {
             if !first {
                 writeln!(f, ",")?;
             }
             first = false;
-            write!(f, "{}: {}", entity + MIN_INODE, attr)?;
+            write!(f, "{}: {}", entity, attr)?;
         }
 
         Ok(())

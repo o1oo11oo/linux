@@ -26,7 +26,7 @@ global_lock! {
 
 global_lock! {
     // SAFETY: Initialized in LSM initializer before first use.
-    pub(crate) unsafe(uninit) static OBJECT_ATTRIBUTES: Mutex<ObjectAttributes> = ObjectAttributes::new();
+    pub(crate) unsafe(uninit) static OBJECT_ATTRIBUTES: Mutex<ObjectAttributes> = unsafe { ObjectAttributes::new() };
 }
 
 global_lock! {
@@ -47,6 +47,9 @@ pub(crate) fn init() -> Result {
         OBJECT_ATTRIBUTES.init();
         ENV_ATTR_WRITE_GUARD.init();
     }
+
+    // Initialize the HashMap as required
+    OBJECT_ATTRIBUTES.lock().initialize();
 
     // The attributes are encoded because it is simpler to work with
     // (implementing Copy means they use no lifetimes) and can be used for
