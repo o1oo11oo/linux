@@ -8,7 +8,6 @@ use kernel::{
     alloc::arrayvec::ArrayVec,
     bindings, c_str,
     fs::LocalFile,
-    hash::HashMap,
     prelude::*,
     str::CString,
     sync::{
@@ -30,11 +29,6 @@ global_lock! {
     unsafe(uninit) static POLICY_WRITE_GUARD: Mutex<()> = ();
 }
 
-global_lock! {
-    // SAFETY: Initialized in module initializer before first use.
-    unsafe(uninit) static CACHE: Mutex<HashMap<(usize, usize, usize), bool>> = unsafe { HashMap::new_uninitialized() };
-}
-
 static POLICY: ProjectableGlobalLockedBy<Rcu<KBox<Policy>>, POLICY_WRITE_GUARD> =
     ProjectableGlobalLockedBy::new(Rcu::null());
 
@@ -43,11 +37,7 @@ pub(crate) fn init() -> Result {
     // SAFETY: All initializers are called exactly once.
     unsafe {
         POLICY_WRITE_GUARD.init();
-        CACHE.init();
     };
-
-    // Properly initialize the HashMap by resetting it
-    CACHE.lock().reset();
 
     // The attributes are encoded because it is simpler to work with
     // (implementing Copy means they use no lifetimes) and can be used for
@@ -132,16 +122,6 @@ pub(crate) fn file_permission(file: &LocalFile, mask: i32) -> Result<bool> {
 ///
 /// If a rule matches, its post-condition is executed by the EPP, if one exists.
 pub(crate) fn resolve(operation: usize, uid: usize, object: usize) -> Result<bool> {
-    // Check the cache for quick policy resolution first, keep it locked because
-    // of post-conditions
-    let mut cache_guard = CACHE.lock();
-    let cache = &mut *cache_guard;
-    pr_info!("Current cache: {cache:?}");
-    if let Some(&resolution) = cache.get(&(operation, uid, object)) {
-        pr_info!("Resolving request using cached resolution: {resolution}");
-        return Ok(resolution);
-    }
-
     // Get locks for the attribute stores before entering RCU read critical
     // section as to not block during it
     let mut user_attr_guard = pip::USER_ATTRIBUTES.lock();
@@ -201,15 +181,6 @@ pub(crate) fn resolve(operation: usize, uid: usize, object: usize) -> Result<boo
             GFP_NOWAIT,
         )?;
     }
-
-    // If post-conditions were executed we need to reset the cache
-    if !post_conditions.is_empty() {
-        cache.reset();
-        pr_info!("Resetting cache because post-conditions were executed");
-    }
-
-    // Add this resolution to the cache
-    cache.insert_resize_if_needed((operation, uid, object), resolution, GFP_NOWAIT)?;
 
     Ok(resolution)
 }
