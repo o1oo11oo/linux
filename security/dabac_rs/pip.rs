@@ -17,7 +17,10 @@ use kernel::{
     },
 };
 
-use crate::policy::{Attributions, ObjectAttributes, UserAttributes};
+use crate::{
+    pdp,
+    policy::{Attributions, ObjectAttributes, UserAttributes},
+};
 
 global_lock! {
     // SAFETY: Initialized in LSM initializer before first use.
@@ -86,7 +89,7 @@ pub(crate) fn init() -> Result {
     // - day of week: 1-7
 
     let attrs = "0: 0=1 & 1=3, 1000: 0=2 & 1=4".parse()?;
-    set_user_attributes(attrs);
+    set_user_attributes(attrs)?;
     pr_info!("User attributes initialized");
 
     let attrs = "1048581: 0=1 & 1=3,
@@ -94,7 +97,7 @@ pub(crate) fn init() -> Result {
         1048588: 0=3 & 1=5,
         1048589: 0=3 & 1=5"
         .parse()?;
-    set_object_attributes(attrs);
+    set_object_attributes(attrs)?;
     pr_info!("Object attributes initialized");
 
     let attrs = "0=1 & 1=1".parse()?;
@@ -109,9 +112,16 @@ pub(crate) fn get_serialized_user_attrs() -> Result<CString> {
     CString::try_from_fmt(fmt!("{}", &*guard))
 }
 
-pub(crate) fn set_user_attributes(attrs: UserAttributes) {
+pub(crate) fn set_user_attributes(mut attrs: UserAttributes) -> Result {
+    // Make sure the attributions are pre-allocated for all possible accesses
+    let max_id = pdp::get_max_attribute_id();
+    attrs.ensure_attribution_length(max_id, GFP_KERNEL)?;
+
+    // Store the new attributions
     let mut guard = USER_ATTRIBUTES.lock();
     *guard = attrs;
+
+    Ok(())
 }
 
 pub(crate) fn get_serialized_object_attrs() -> Result<CString> {
@@ -119,9 +129,16 @@ pub(crate) fn get_serialized_object_attrs() -> Result<CString> {
     CString::try_from_fmt(fmt!("{}", &*guard))
 }
 
-pub(crate) fn set_object_attributes(attrs: ObjectAttributes) {
+pub(crate) fn set_object_attributes(mut attrs: ObjectAttributes) -> Result {
+    // Make sure the attributions are pre-allocated for all possible accesses
+    let max_id = pdp::get_max_attribute_id();
+    attrs.ensure_attribution_length(max_id, GFP_KERNEL)?;
+
+    // Store the new attributions
     let mut guard = OBJECT_ATTRIBUTES.lock();
     *guard = attrs;
+
+    Ok(())
 }
 
 pub(crate) fn get_serialized_env_attrs() -> Result<CString> {
@@ -140,6 +157,15 @@ pub(crate) fn set_env_attributes(attrs: Attributions) -> Result {
     env_attr_writer.as_mut().replace(attrs);
 
     Ok(())
+}
+
+pub(crate) fn ensure_attribution_length(index: usize) -> Result {
+    USER_ATTRIBUTES
+        .lock()
+        .ensure_attribution_length(index, GFP_KERNEL)?;
+    OBJECT_ATTRIBUTES
+        .lock()
+        .ensure_attribution_length(index, GFP_KERNEL)
 }
 
 pub(crate) fn add_user_attribution(

@@ -54,6 +54,14 @@ impl Expression {
             .iter()
             .any(|clause| clause.evaluate(user_attr, object_attr, env_attr))
     }
+
+    pub(crate) fn get_max_attribute_id(&self) -> usize {
+        self.clauses
+            .iter()
+            .map(Conjunction::get_max_attribute_id)
+            .max()
+            .unwrap_or(0)
+    }
 }
 
 impl FromStr for Expression {
@@ -104,6 +112,14 @@ impl Conjunction {
         self.clauses
             .iter()
             .all(|clause| clause.evaluate(user_attr, object_attr, env_attr))
+    }
+
+    fn get_max_attribute_id(&self) -> usize {
+        self.clauses
+            .iter()
+            .map(Literal::get_max_attribute_id)
+            .max()
+            .unwrap_or(0)
     }
 }
 
@@ -156,6 +172,12 @@ impl Literal {
         match self {
             Literal::Identity(term) => term.evaluate(user_attr, object_attr, env_attr),
             Literal::Negation(term) => !term.evaluate(user_attr, object_attr, env_attr),
+        }
+    }
+
+    fn get_max_attribute_id(&self) -> usize {
+        match self {
+            Literal::Identity(term) | Literal::Negation(term) => term.get_max_attribute_id(),
         }
     }
 }
@@ -229,6 +251,13 @@ impl Term {
             Operation::Greater => left > right,
         }
     }
+
+    fn get_max_attribute_id(&self) -> usize {
+        core::cmp::max(
+            self.left.get_max_attribute_id(),
+            self.right.get_max_attribute_id(),
+        )
+    }
 }
 
 impl FromStr for Term {
@@ -286,6 +315,13 @@ impl Value {
             Value::ObjectAttr(identifier) => object_attr.get(*identifier),
             Value::EnvAttr(identifier) => env_attr.get(*identifier),
             Value::Constant(x) => Some(*x),
+        }
+    }
+
+    fn get_max_attribute_id(&self) -> usize {
+        match self {
+            Value::UserAttr(identifier) | Value::ObjectAttr(identifier) => *identifier,
+            _ => 0,
         }
     }
 }

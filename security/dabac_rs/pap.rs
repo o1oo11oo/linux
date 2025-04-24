@@ -8,7 +8,7 @@ use core::str;
 
 use kernel::{prelude::*, str::CString};
 
-use crate::{helpers, pdp, pip};
+use crate::{helpers, pdp, pip, policy::Policy};
 
 fn check_access(operation: usize) -> Result {
     // There is no file to access, but the current policy semantics cannot handle that
@@ -37,9 +37,7 @@ pub(crate) fn update_user_attr(attrs: &[u8]) -> Result {
     // Read and parse the attributes and update them in the PIP
     let attrs = str::from_utf8(attrs)?.parse()?;
     pr_info!("Updating user attributes to: {attrs:?}");
-    pip::set_user_attributes(attrs);
-
-    Ok(())
+    pip::set_user_attributes(attrs)
 }
 
 pub(crate) fn read_object_attr() -> Result<CString> {
@@ -57,9 +55,7 @@ pub(crate) fn update_object_attr(attrs: &[u8]) -> Result {
     // Read and parse the attributes and update them in the PIP
     let attrs = str::from_utf8(attrs)?.parse()?;
     pr_info!("Updating object attributes to: {attrs:?}");
-    pip::set_object_attributes(attrs);
-
-    Ok(())
+    pip::set_object_attributes(attrs)
 }
 
 pub(crate) fn read_env_attr() -> Result<CString> {
@@ -77,9 +73,7 @@ pub(crate) fn update_env_attr(attrs: &[u8]) -> Result {
     // Read and parse the attributes and update them in the PIP
     let attrs = str::from_utf8(attrs)?.parse()?;
     pr_info!("Updating environmental attributes to: {attrs:?}");
-    pip::set_env_attributes(attrs)?;
-
-    Ok(())
+    pip::set_env_attributes(attrs)
 }
 
 pub(crate) fn read_policy() -> Result<CString> {
@@ -95,9 +89,11 @@ pub(crate) fn update_policy(policy: &[u8]) -> Result {
     check_access(1)?;
 
     // Read and parse the policy and update it in the PDP
-    let policy = str::from_utf8(policy)?.parse()?;
+    let policy: Policy = str::from_utf8(policy)?.parse()?;
+    let max_id = policy.get_max_attribute_id();
     pr_info!("Updating policy to: {policy:?}");
     pdp::set_policy(policy)?;
 
-    Ok(())
+    // Update attribution allocations just in case we have new maximum identifiers
+    pip::ensure_attribution_length(max_id)
 }

@@ -31,6 +31,9 @@ const PROTECTED_PATH: &CStr = c_str!("/home/dabac_rs/");
 const MAX_POST_CONDITIONS: usize = 32;
 
 fn init() -> Result {
+    // The PDP needs to be initialized first so that the initial policy is available for the PIP to
+    // load its initial attributions and expand the allocation to limit allocations during policy
+    // resolution. Otherwise uninitialized locks might get accessed.
     pdp::init()?;
     pip::init()
 }

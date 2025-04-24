@@ -64,6 +64,14 @@ pub(crate) fn init() -> Result {
     Ok(())
 }
 
+pub(crate) fn get_max_attribute_id() -> usize {
+    let rcu_guard = rcu::read_lock();
+    match POLICY.dereference(&rcu_guard) {
+        Some(p) => p.get_max_attribute_id(),
+        None => 0,
+    }
+}
+
 pub(crate) fn get_serialized_policy() -> Result<CString> {
     let rcu_guard = rcu::read_lock();
     if let Some(policy) = POLICY.dereference(&rcu_guard) {
@@ -172,7 +180,8 @@ pub(crate) fn resolve(operation: usize, uid: usize, object: usize) -> Result<boo
         }
     }
 
-    // Execute all the post-conditions if there are any
+    // Execute all the post-conditions if there are any. This might allocate in some cases, but the
+    // normal happy path should be allocation-free, because the attributions are pre-allocated.
     for post in &post_conditions {
         epp::execute_postcondition(
             post,

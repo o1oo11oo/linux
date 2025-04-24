@@ -81,6 +81,14 @@ impl Policy {
     pub(crate) fn get(&self, operation: usize) -> Option<&KVec<Rule>> {
         self.map.get(operation)
     }
+
+    pub(crate) fn get_max_attribute_id(&self) -> usize {
+        self.map
+            .iter()
+            .map(|op| op.iter().map(Rule::get_max_attribute_id).max().unwrap_or(0))
+            .max()
+            .unwrap_or(0)
+    }
 }
 
 impl FromStr for Policy {
@@ -134,6 +142,15 @@ pub(crate) struct Rule {
     pub(crate) post: PostCondition,
 }
 
+impl Rule {
+    fn get_max_attribute_id(&self) -> usize {
+        core::cmp::max(
+            self.pre.get_max_attribute_id(),
+            self.post.get_max_attribute_id(),
+        )
+    }
+}
+
 impl FromStr for Rule {
     type Err = Error;
 
@@ -177,6 +194,10 @@ impl PreCondition {
     ) -> bool {
         self.formula.evaluate(user_attr, object_attr, env_attr)
     }
+
+    fn get_max_attribute_id(&self) -> usize {
+        self.formula.get_max_attribute_id()
+    }
 }
 
 impl FromStr for PreCondition {
@@ -198,6 +219,16 @@ impl Display for PreCondition {
 #[derive(Debug)]
 pub(crate) struct PostCondition {
     pub(crate) changes: KVec<PolicyChange>,
+}
+
+impl PostCondition {
+    fn get_max_attribute_id(&self) -> usize {
+        self.changes
+            .iter()
+            .map(PolicyChange::get_attribute_id)
+            .max()
+            .unwrap_or(0)
+    }
 }
 
 impl FromStr for PostCondition {
@@ -240,6 +271,16 @@ pub(crate) enum PolicyChange {
     RemoveFromUser(RemoveAttribution),
     AddToObject(AddAttribution),
     RemoveFromObject(RemoveAttribution),
+}
+
+impl PolicyChange {
+    fn get_attribute_id(&self) -> usize {
+        use PolicyChange::*;
+        match self {
+            AddToUser(add) | AddToObject(add) => add.identifier,
+            RemoveFromUser(remove) | RemoveFromObject(remove) => remove.identifier,
+        }
+    }
 }
 
 impl FromStr for PolicyChange {
@@ -362,6 +403,14 @@ impl UserAttributes {
 
         Ok(())
     }
+
+    pub(crate) fn ensure_attribution_length(&mut self, index: usize, flags: Flags) -> Result {
+        for attrs in &mut self.map {
+            attrs.ensure_length(index, flags)?;
+        }
+
+        Ok(())
+    }
 }
 
 impl FromStr for UserAttributes {
@@ -446,6 +495,14 @@ impl ObjectAttributes {
     fn ensure_length(&mut self, index: usize, flags: Flags) -> Result {
         if !self.map.contains_key(&index) {
             self.map.try_reserve(1, flags)?
+        }
+
+        Ok(())
+    }
+
+    pub(crate) fn ensure_attribution_length(&mut self, index: usize, flags: Flags) -> Result {
+        for attrs in self.map.values_mut() {
+            attrs.ensure_length(index, flags)?;
         }
 
         Ok(())
