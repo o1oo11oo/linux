@@ -6,7 +6,7 @@
 
 use kernel::{
     alloc::arrayvec::ArrayVec,
-    bindings, c_str,
+    bindings,
     fs::LocalFile,
     prelude::*,
     str::CString,
@@ -20,9 +20,8 @@ use kernel::{
 use crate::{
     epp, helpers, pip,
     policy::{self, Policy},
+    MAX_POST_CONDITIONS, PROTECTED_PATH,
 };
-
-const PROTECTED_PATH: &CStr = c_str!("/home/dabac_rs/");
 
 global_lock! {
     // SAFETY: Initialized in module initializer before first use.
@@ -151,7 +150,7 @@ pub(crate) fn resolve(operation: usize, uid: usize, object: usize) -> Result<boo
 
     // Collect post-conditions so that they can be executed after all the
     // pre-conditions have been checked
-    let mut post_conditions = ArrayVec::<_, { super::MAX_POST_CONDITIONS }>::new();
+    let mut post_conditions = ArrayVec::<_, { MAX_POST_CONDITIONS }>::new();
 
     pr_info!(
         "Operation {operation}: user {uid} (attr: {user_attr:?}) is trying to access {object:?} (attr: {object_attr:?})"
