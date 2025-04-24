@@ -44,10 +44,14 @@
 //!
 //! Here's what an example policy looks like:
 //! ```text
-//! 0:= u0=c1 & o0=c1;
-//! 1:= u0=c1 & o0=c1 => -o 1048581: 0, +o 1048581: 0=2;
-//! 0:= u0=c1 & o0=c2 | u0=c2 & o0=c2;
-//! 1:= u0=c1 & o0=c2 | u0=c2 & o0=c2
+//! 0:= u0=c1 | u0=c2;
+//! 1:= u0=c1;
+//! 2:= u0=c1 & o0=c1;
+//! 3:= u0=c1 & o0=c1 => +o 1048581: 0=2;
+//! 2:= u0=c1 & o0=c2 | u0=c2 & o0=c2;
+//! 3:= u0=c1 & o0=c2 | u0=c2 & o0=c2;
+//! 2:= o0=c3 & e0>c16;
+//! 3:= o0=c3 & e0>c16
 //! ```
 //!
 //! [expressions]: crate::expr::Expression

@@ -55,15 +55,19 @@ pub(crate) fn init() -> Result {
     // allow (ab-)using Vecs as HashMaps. See PIP for an int => string mapping.
 
     // Operations:
-    // - 0: file read
-    // - 1: file write
+    // - 0: policy read
+    // - 1: policy write
+    // - 2: file read
+    // - 3: file write
 
-    let policy = "0:= u0=c1 & o0=c1;
-        1:= u0=c1 & o0=c1 => +o 1048581: 0=2;
-        0:= u0=c1 & o0=c2 | u0=c2 & o0=c2;
-        1:= u0=c1 & o0=c2 | u0=c2 & o0=c2;
-        0:= o0=c3 & e0>c16;
-        1:= o0=c3 & e0>c16"
+    let policy = "0:= u0=c1 | u0=c2;
+        1:= u0=c1;
+        2:= u0=c1 & o0=c1;
+        3:= u0=c1 & o0=c1 => +o 1048581: 0=2;
+        2:= u0=c1 & o0=c2 | u0=c2 & o0=c2;
+        3:= u0=c1 & o0=c2 | u0=c2 & o0=c2;
+        2:= o0=c3 & e0>c16;
+        3:= o0=c3 & e0>c16"
         .parse()?;
     set_policy(policy)?;
     pr_info!("Policy initialized");
@@ -127,7 +131,7 @@ pub(crate) fn file_permission(file: &LocalFile, mask: i32) -> Result<bool> {
 /// The values of the attributes need to be equal.
 ///
 /// If a rule matches, its post-condition is executed by the EPP, if one exists.
-fn resolve(operation: usize, uid: usize, object: usize) -> Result<bool> {
+pub(crate) fn resolve(operation: usize, uid: usize, object: usize) -> Result<bool> {
     // Check the cache for quick policy resolution first, keep it locked because
     // of post-conditions
     let mut cache_guard = CACHE.lock();
@@ -216,8 +220,8 @@ fn is_protected(name: &CStr) -> bool {
 
 fn get_op_from_mask(mask: i32) -> Result<usize> {
     match mask.try_into()? {
-        bindings::MAY_APPEND | bindings::MAY_WRITE => Ok(1),
-        bindings::MAY_READ => Ok(0),
+        bindings::MAY_APPEND | bindings::MAY_WRITE => Ok(3),
+        bindings::MAY_READ => Ok(2),
         _ => Err(EINVAL),
     }
 }

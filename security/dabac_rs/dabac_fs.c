@@ -72,7 +72,8 @@ static struct dentry *dabac_rs_create_file(const char *filename, const struct fi
 {
 	struct dentry *f;
 
-	f = securityfs_create_file(filename, 0600, dabacfs, NULL, fops);
+	// File is writable by everyone because the PAP checks each access with the PDP
+	f = securityfs_create_file(filename, 0666, dabacfs, NULL, fops);
 	if (!f) {
 		pr_err("dabac_rs: Failed to create file /sys/kernel/security/dabac_rs/%s", filename);
 		dabac_rs_destroy_fs();
