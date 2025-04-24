@@ -114,12 +114,13 @@ pub(crate) fn file_permission(file: &LocalFile, mask: i32) -> Result<bool> {
 
 /// Policy resolution function.
 ///
-/// At least one rule needs to be fulfilled, which means
-/// the user   needs to have at least the user   AVPs required by the rule and
-/// the object needs to have at least the object AVPs required by the rule.
-/// The values of the attributes need to be equal.
+/// At least one rule for the operation needs to be fulfilled, which means the current attributions
+/// for the user trying to access the object and the current environmental attributions need to
+/// satisfy the pre-condition formula of at least on rule for access to be granted.
 ///
-/// If a rule matches, its post-condition is executed by the EPP, if one exists.
+/// If a rule matches, its post-condition is executed by the EPP, if one exists. Since multiple
+/// rules could allow an access, all of them are checked and all associated post-conditions are
+/// executed.
 pub(crate) fn resolve(operation: usize, uid: usize, object: usize) -> Result<bool> {
     // Get locks for the attribute stores before entering RCU read critical
     // section as to not block during it
