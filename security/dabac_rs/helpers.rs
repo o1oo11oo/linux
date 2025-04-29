@@ -51,7 +51,7 @@ pub(crate) fn file_get_inode_number(file: &LocalFile) -> kernel::ffi::c_ulong {
     unsafe { (*inode).i_ino }
 }
 
-pub(crate) fn _vec_clone<T: Clone>(src: &[T], flags: Flags) -> Result<KVec<T>> {
+pub(crate) fn vec_clone<T: Clone>(src: &[T], flags: Flags) -> Result<KVec<T>> {
     let mut cp = kvec![];
     cp.extend_from_slice(src, flags)?;
     Ok(cp)

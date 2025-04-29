@@ -69,7 +69,7 @@ use core::{
 
 use kernel::{alloc::Flags, hash::HashMap, prelude::*};
 
-use crate::expr::Expression;
+use crate::{expr::Expression, helpers::vec_clone};
 
 /// Main policy type, stores all [`Rule`]s with their pre- and post-conditions.
 #[derive(Debug)]
@@ -549,7 +549,7 @@ impl Display for ObjectAttributes {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq, Eq)]
 pub(crate) struct Attributions {
     map: KVec<Option<NonZeroU32>>,
 }
@@ -583,6 +583,12 @@ impl Attributions {
 
     pub(crate) fn remove(&mut self, identifier: usize, flags: Flags) -> Result {
         self.set(identifier, None, flags)
+    }
+
+    pub(crate) fn clone(&self, flags: Flags) -> Result<Self> {
+        Ok(Attributions {
+            map: vec_clone(&self.map, flags)?,
+        })
     }
 
     // Since this might be called from within an RCU read critical section,

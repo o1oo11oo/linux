@@ -30,6 +30,9 @@ const PROTECTED_PATH: &CStr = c_str!("/home/dabac_rs/");
 /// The maximum amount of post-conditions that can be executed for one operation.
 const MAX_POST_CONDITIONS: usize = 32;
 
+/// The number of entries the cache can hold, same as SELinux's AVC.
+const CACHE_SIZE: usize = 512;
+
 fn init() -> Result {
     // The PDP needs to be initialized first so that the initial policy is available for the PIP to
     // load its initial attributions and expand the allocation to limit allocations during policy
