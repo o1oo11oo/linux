@@ -2,9 +2,6 @@
  * License, v. 2.0. If a copy of the MPL was not distributed with this
  * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
-#![no_std]
-#![deny(unsafe_code)]
-
 //! A simple, fast, least-recently-used (LRU) cache.
 //!
 //! [`LRUCache`] uses a fixed-capacity array for storage. It provides `O(1)` insertion, and `O(n)`
@@ -12,11 +9,8 @@
 //!
 //! See the [`LRUCache`] docs for details.
 
-use arrayvec::ArrayVec;
+use crate::alloc::arrayvec::ArrayVec;
 use core::mem::replace;
-
-#[cfg(test)]
-mod tests;
 
 /// A LRU cache using a statically-sized array for storage.
 ///
