@@ -4,15 +4,13 @@
 //!
 //! C headers: [`include/crypto/hash.h`](../../../../include/crypto/hash.h)
 
+use crate::alloc::allocator::Kmalloc;
 use crate::{
-    error::{
-        code::{EINVAL, ENOMEM},
-        from_err_ptr, to_result, Result,
-    },
+    alloc::{Allocator, Flags},
+    error::{code::EINVAL, from_err_ptr, to_result, Result},
     str::CStr,
 };
-use alloc::alloc::{alloc, dealloc};
-use core::alloc::Layout;
+use core::{alloc::Layout, ptr::NonNull};
 
 /// Corresponds to the kernel's `struct crypto_shash`.
 ///
@@ -31,8 +29,8 @@ impl Drop for Shash {
 impl Shash {
     /// Creates a [`Shash`] object for a message digest handle.
     pub fn new(name: &CStr, t: u32, mask: u32) -> Result<Shash> {
-        // SAFETY: There are no safety requirements for this FFI call.
         let ptr =
+            // SAFETY: There are no safety requirements for this FFI call.
             unsafe { from_err_ptr(bindings::crypto_alloc_shash(name.as_char_ptr(), t, mask)) }?;
         // INVARIANT: `ptr` is valid and non-null since `crypto_alloc_shash`
         // returned a valid pointer which was null-checked.
@@ -69,8 +67,8 @@ impl Drop for ShashDesc<'_> {
     fn drop(&mut self) {
         // SAFETY: The type invariant guarantees that the pointer is valid.
         unsafe {
-            dealloc(
-                self.ptr.cast(),
+            Kmalloc::free(
+                NonNull::new_unchecked(self.ptr.cast()),
                 Layout::from_size_align(self.size, 2).unwrap(),
             );
         }
@@ -79,16 +77,12 @@ impl Drop for ShashDesc<'_> {
 
 impl<'a> ShashDesc<'a> {
     /// Creates a [`ShashDesc`] object for a request data structure for message digest.
-    pub fn new(tfm: &'a Shash) -> Result<Self> {
-        // SAFETY: The type invariant guarantees that `tfm.0` pointer is valid.
+    pub fn new(tfm: &'a Shash, flags: Flags) -> Result<Self> {
         let size = core::mem::size_of::<bindings::shash_desc>()
+            // SAFETY: The type invariant guarantees that `tfm.0` pointer is valid.
             + unsafe { bindings::crypto_shash_descsize(tfm.0) } as usize;
-        let layout = Layout::from_size_align(size, 2)?;
-        // SAFETY: It's safe because layout has non-zero size.
-        let ptr = unsafe { alloc(layout) } as *mut bindings::shash_desc;
-        if ptr.is_null() {
-            return Err(ENOMEM);
-        }
+        let layout = Layout::from_size_align(size, 2).unwrap();
+        let ptr = Kmalloc::alloc(layout, flags)?.as_ptr().cast();
         // INVARIANT: `ptr` is valid and non-null since `alloc`
         // returned a valid pointer which was null-checked.
         let mut desc = ShashDesc { ptr, tfm, size };
