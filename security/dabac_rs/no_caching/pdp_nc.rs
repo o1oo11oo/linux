@@ -1,8 +1,10 @@
 // SPDX-License-Identifier: GPL-2.0
 
-//! Rust DABAC LSM PDP.
+//! Rust DABAC LSM (NC) PDP.
 //!
 //! Policy Decision Point for Rust-based DABAC LSM.
+//!
+//! Variant: no caching (NC)
 
 use kernel::{
     alloc::arrayvec::ArrayVec,

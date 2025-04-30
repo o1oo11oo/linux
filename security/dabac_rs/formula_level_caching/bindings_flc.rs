@@ -1,6 +1,8 @@
 // SPDX-License-Identifier: GPL-2.0
 
-//! Variant-dependant bindings for Rust DABAC LSM.
+//! Variant-dependant bindings for Rust DABAC LSM (FLC).
+//!
+//! Variant: formula level caching (FLC)
 
 use kernel::{bindings, ffi::*, uaccess::UserPtr};
 

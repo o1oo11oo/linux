@@ -1,5 +1,8 @@
 // SPDX-License-Identifier: GPL-2.0
 
+// PAP bindings for Rust DABAC LSM
+// Variant: no caching (NC)
+
 // This code is based on the ABAC LSM securityfs implementation
 
 #include <linux/security.h>

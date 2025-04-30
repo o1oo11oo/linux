@@ -1,8 +1,10 @@
 // SPDX-License-Identifier: GPL-2.0
 
-//! Rust DABAC LSM PDP.
+//! Rust DABAC LSM (FLCH) PDP.
 //!
 //! Policy Decision Point for Rust-based DABAC LSM.
+//!
+//! Variant: formula level caching with hashing (FLCH)
 
 use kernel::{
     alloc::arrayvec::ArrayVec,

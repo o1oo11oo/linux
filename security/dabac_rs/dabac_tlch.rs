@@ -11,13 +11,13 @@
 #![allow(clippy::incompatible_msrv)]
 
 mod bindings;
-#[path = "top_level_caching_hashing/bindings.rs"]
+#[path = "top_level_caching/bindings_tlch.rs"]
 mod bindings_variants;
 mod epp;
 mod expr;
 mod helpers;
 mod pap;
-#[path = "top_level_caching_hashing/pdp.rs"]
+#[path = "top_level_caching/pdp_tlch.rs"]
 mod pdp;
 mod pip;
 mod policy;

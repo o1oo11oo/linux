@@ -1,12 +1,15 @@
 // SPDX-License-Identifier: GPL-2.0
 
-//! Rust DABAC LSM PDP.
+//! Rust DABAC LSM (TLCH) PDP.
 //!
 //! Policy Decision Point for Rust-based DABAC LSM.
+//!
+//! Variant: top level caching with hashing (TLCH)
 
 use kernel::{
     alloc::arrayvec::ArrayVec,
-    bindings,
+    bindings, c_str,
+    crypto::hash::{Shash, ShashDesc},
     fs::LocalFile,
     lru::LRUCache,
     prelude::*,
@@ -21,7 +24,7 @@ use crate::{
     epp,
     helpers::{self, global_lock},
     pip,
-    policy::{self, Attributions, Policy},
+    policy::{self, Policy},
     CACHE_SIZE, MAX_POST_CONDITIONS, PROTECTED_PATH,
 };
 
@@ -44,10 +47,7 @@ pub(crate) struct CacheEntry {
 }
 
 struct CacheKey {
-    operation: usize,
-    uid: usize,
-    object: usize,
-    env_attr: Attributions,
+    hash: [u8; 32],
 }
 
 struct CacheValue {
@@ -174,6 +174,11 @@ pub(crate) fn file_permission(file: &LocalFile, mask: i32) -> Result<bool> {
 /// rules could allow an access, all of them are checked and all associated post-conditions are
 /// executed.
 pub(crate) fn resolve(operation: usize, uid: usize, object: usize) -> Result<bool> {
+    // Initialize hasher before entering critical sections
+    let hash = Shash::new(c_str!("sha256"), 0, 0)?;
+    let mut hash_state = ShashDesc::new(&hash, GFP_KERNEL)?;
+    let mut buf = [0u8; 32];
+
     // Get locks for the attribute stores and for the cache before entering RCU read critical
     // section as to not block during it
     let mut user_attr_guard = pip::USER_ATTRIBUTES.lock();
@@ -213,16 +218,19 @@ pub(crate) fn resolve(operation: usize, uid: usize, object: usize) -> Result<boo
     let rules = policy.get(operation).ok_or(EINVAL)?;
     let mut resolution = false;
 
+    // Calculate cache key
+    hash_state.update(&operation.to_ne_bytes())?;
+    hash_state.update(&uid.to_ne_bytes())?;
+    hash_state.update(&object.to_ne_bytes())?;
+    hash_state.update(env_attr.as_bytes())?;
+    hash_state.finalize(&mut buf)?;
+
     // Check the cache for previous resolutions
-    if let Some(entry) = cache.find(|e| {
-        e.key.operation == operation
-            && e.key.uid == uid
-            && e.key.object == object
-            && e.key.env_attr == *env_attr
-    }) {
+    if let Some(entry) = cache.find(|e| e.key.hash == buf) {
         // We found a cache entry, retrieve resolution from there
         // Since it was stored in the cache, it cannot have any post-conditions
         resolution = entry.value.resolution;
+
         pr_info!("Cache hit, resolution: {resolution}, will execute post-conditions: false");
     } else {
         // There was no cache entry matching this access, so check all rules if they allow access
@@ -242,12 +250,7 @@ pub(crate) fn resolve(operation: usize, uid: usize, object: usize) -> Result<boo
         // never store an entry that would execute post-conditions.
         if post_conditions.is_empty() {
             cache.insert(CacheEntry {
-                key: CacheKey {
-                    operation,
-                    uid,
-                    object,
-                    env_attr: env_attr.clone(GFP_NOWAIT)?,
-                },
+                key: CacheKey { hash: buf },
                 value: CacheValue { resolution },
             });
         }
