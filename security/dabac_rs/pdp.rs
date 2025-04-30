@@ -189,7 +189,7 @@ pub(crate) fn resolve(operation: usize, uid: usize, object: usize) -> Result<boo
     let mut post_conditions = ArrayVec::<_, { MAX_POST_CONDITIONS }>::new();
 
     pr_info!(
-        "Operation {operation}: user {uid} (attr: {user_attr:?}) is trying to access {object:?} (attr: {object_attr:?})"
+        "Operation {operation}: user {uid} (attr: {user_attr:?}) is trying to access {object:?} (attr: {object_attr:?}) under env {env_attr:?}"
     );
 
     // Get the rules for this operation, if it is a valid one
