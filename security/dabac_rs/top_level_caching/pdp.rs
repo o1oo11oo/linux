@@ -14,7 +14,7 @@ use kernel::{
     sync::{
         global_lock,
         rcu::{self, Rcu},
-        ProjectableGlobalLockedBy,
+        GlobalGuard, ProjectableGlobalLockedBy,
     },
 };
 
@@ -34,10 +34,10 @@ static POLICY: ProjectableGlobalLockedBy<Rcu<KBox<Policy>>, POLICY_WRITE_GUARD> 
 
 global_lock! {
     // SAFETY: Initialized in module initializer before first use.
-    unsafe(uninit) static CACHE: Mutex<LRUCache<CacheEntry, {CACHE_SIZE}>> = LRUCache::new();
+    pub(crate) unsafe(uninit) static CACHE: Mutex<LRUCache<CacheEntry, {CACHE_SIZE}>> = LRUCache::new();
 }
 
-struct CacheEntry {
+pub(crate) struct CacheEntry {
     key: CacheKey,
     value: CacheValue,
 }
@@ -108,10 +108,30 @@ pub(crate) fn get_serialized_policy() -> Result<CString> {
 pub(crate) fn set_policy(policy: Policy) -> Result {
     let policy = KBox::new(policy, GFP_KERNEL)?;
     let mut guard = POLICY_WRITE_GUARD.lock();
+
+    // Lock the cache and reset it when the policy is updated
+    let mut cache = CACHE.lock();
+    cache.clear();
+    pr_info!("Policy update, cache has been reset.");
+
     let mut policy_writer = POLICY.as_mut(&mut guard);
     policy_writer.as_mut().replace(policy);
 
     Ok(())
+}
+
+pub(crate) fn notify_attrs_changed() {
+    CACHE.lock().clear();
+    pr_info!("Attribution update, cache has been reset.");
+}
+
+// Return the guard to hold the lock until the attributions are updated
+pub(crate) fn notify_env_attrs_changed() -> GlobalGuard<CACHE> {
+    let mut cache = CACHE.lock();
+    cache.clear();
+    pr_info!("Environmental attribution update, cache has been reset.");
+
+    cache
 }
 
 /// Rust implementation of the file_permission hook.

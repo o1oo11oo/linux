@@ -90,6 +90,14 @@ pub(crate) fn set_policy(policy: Policy) -> Result {
     Ok(())
 }
 
+pub(crate) fn notify_attrs_changed() {
+    // Nothing to do as this variant does not have a cache
+}
+
+pub(crate) fn notify_env_attrs_changed() {
+    // Nothing to do as this variant does not have a cache
+}
+
 /// Rust implementation of the file_permission hook.
 ///
 /// Gets called everytime a file gets read or written. Returns Ok(true) when the
