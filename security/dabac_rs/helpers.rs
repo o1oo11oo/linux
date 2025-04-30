@@ -56,3 +56,47 @@ pub(crate) fn vec_clone<T: Clone>(src: &[T], flags: Flags) -> Result<KVec<T>> {
     cp.extend_from_slice(src, flags)?;
     Ok(cp)
 }
+
+/// Vendored [`global_lock`](kernel::sync::lock::global::global_lock)
+///
+/// This allows selecting the backend flexibly for the variants without needing to duplicate even
+/// more code.
+#[macro_export]
+macro_rules! global_lock {
+    {
+        $(#[$meta:meta])* $pub:vis
+        unsafe(uninit) static $name:ident: Lock<$valuety:ty> = $value:expr;
+    } => {
+        #[doc = ::core::concat!(
+            "Backend type used by [`",
+            ::core::stringify!($name),
+            "`](static@",
+            ::core::stringify!($name),
+            ")."
+        )]
+        #[allow(clippy::upper_case_acronyms, non_camel_case_types, unreachable_pub)]
+        $pub enum $name {}
+
+        impl ::kernel::sync::lock::GlobalLockBackend for $name {
+            const NAME: &'static ::kernel::str::CStr = ::kernel::c_str!(::core::stringify!($name));
+            type Item = $valuety;
+            type Backend = $crate::global_lock_inner!();
+
+            fn get_lock_class() -> &'static ::kernel::sync::LockClassKey {
+                ::kernel::static_lock_class!()
+            }
+        }
+
+        $(#[$meta])*
+        $pub static $name: ::kernel::sync::lock::GlobalLock<$name> = {
+            // Defined here to be outside the unsafe scope.
+            let init: $valuety = $value;
+
+            // SAFETY:
+            // * The user of this macro promises to initialize the macro before use.
+            // * We are only generating one static with this backend type.
+            unsafe { ::kernel::sync::lock::GlobalLock::new(init) }
+        };
+    };
+}
+pub(crate) use global_lock;

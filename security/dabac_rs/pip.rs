@@ -8,7 +8,6 @@ use core::num::NonZeroU32;
 
 use kernel::{
     alloc::Flags,
-    global_lock,
     prelude::*,
     str::CString,
     sync::{
@@ -18,23 +17,24 @@ use kernel::{
 };
 
 use crate::{
+    helpers::global_lock,
     pdp,
     policy::{Attributions, ObjectAttributes, UserAttributes},
 };
 
 global_lock! {
     // SAFETY: Initialized in LSM initializer before first use.
-    pub(crate) unsafe(uninit) static USER_ATTRIBUTES: Mutex<UserAttributes> = UserAttributes::new();
+    pub(crate) unsafe(uninit) static USER_ATTRIBUTES: Lock<UserAttributes> = UserAttributes::new();
 }
 
 global_lock! {
     // SAFETY: Initialized in LSM initializer before first use.
-    pub(crate) unsafe(uninit) static OBJECT_ATTRIBUTES: Mutex<ObjectAttributes> = unsafe { ObjectAttributes::new() };
+    pub(crate) unsafe(uninit) static OBJECT_ATTRIBUTES: Lock<ObjectAttributes> = unsafe { ObjectAttributes::new() };
 }
 
 global_lock! {
     // SAFETY: Initialized in LSM initializer before first use.
-    pub(crate) unsafe(uninit) static ENV_ATTR_WRITE_GUARD: Mutex<()> = ();
+    pub(crate) unsafe(uninit) static ENV_ATTR_WRITE_GUARD: Lock<()> = ();
 }
 
 pub(crate) static ENV_ATTRIBUTES: ProjectableGlobalLockedBy<

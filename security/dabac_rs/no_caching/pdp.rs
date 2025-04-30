@@ -11,21 +11,22 @@ use kernel::{
     prelude::*,
     str::CString,
     sync::{
-        global_lock,
         rcu::{self, Rcu},
         ProjectableGlobalLockedBy,
     },
 };
 
 use crate::{
-    epp, helpers, pip,
+    epp,
+    helpers::{self, global_lock},
+    pip,
     policy::{self, Policy},
     MAX_POST_CONDITIONS, PROTECTED_PATH,
 };
 
 global_lock! {
     // SAFETY: Initialized in module initializer before first use.
-    unsafe(uninit) static POLICY_WRITE_GUARD: Mutex<()> = ();
+    unsafe(uninit) static POLICY_WRITE_GUARD: Lock<()> = ();
 }
 
 static POLICY: ProjectableGlobalLockedBy<Rcu<KBox<Policy>>, POLICY_WRITE_GUARD> =
