@@ -51,7 +51,6 @@ struct CacheKey {
 
 struct CacheValue {
     resolution: bool,
-    post_condition_indices: ArrayVec<usize, { MAX_POST_CONDITIONS }>,
 }
 
 /// Initialize the PDP during LSM initialization
@@ -202,9 +201,7 @@ pub(crate) fn resolve(operation: usize, uid: usize, object: usize) -> Result<boo
     let user_attr = user_attr_guard.get(uid);
     let object_attr = object_attr_guard.get(object);
 
-    // Collect post-conditions so that they can be executed after all the pre-conditions have been
-    // checked and stored in the cache
-    let mut post_condition_indices = ArrayVec::<_, { MAX_POST_CONDITIONS }>::new();
+    // Collect post-conditions to execute them after all the pre-conditions have been checked
     let mut post_conditions = ArrayVec::<_, { MAX_POST_CONDITIONS }>::new();
 
     pr_info!(
@@ -222,39 +219,26 @@ pub(crate) fn resolve(operation: usize, uid: usize, object: usize) -> Result<boo
             && e.key.object == object
             && e.key.env_attr == *env_attr
     }) {
-        // We found a cache entry, retrieve resolution and post-conditions from there
+        // We found a cache entry, retrieve resolution from there
+        // Since it was stored in the cache, it cannot have any post-conditions
         resolution = entry.value.resolution;
-
-        for post in entry
-            .value
-            .post_condition_indices
-            .iter()
-            .filter_map(|&idx| rules.get(idx).map(|r| &r.post))
-        {
-            post_conditions.try_push(post)?;
-        }
-
-        pr_info!(
-            "Cache hit, resolution: {}, will execute post-conditions: {}",
-            resolution,
-            !post_conditions.is_empty()
-        );
+        pr_info!("Cache hit, resolution: {resolution}, will execute post-conditions: false");
     } else {
         // There was no cache entry matching this access, so check all rules if they allow access
         // and collect all post-conditions for the ones evaluating to true to execute them after
         // all rules were checked
-        for (idx, rule) in rules.iter().enumerate() {
+        for rule in rules.iter() {
             if rule.pre.evaluate(user_attr, object_attr, env_attr) {
                 resolution = true;
                 if !rule.post.changes.is_empty() {
-                    post_condition_indices.try_push(idx)?;
                     post_conditions.try_push(&rule.post)?;
                 }
             }
         }
 
-        // Since there was no cache entry for this, store the resolution and post-conditions, but
-        // only if there are no post-conditions to execute, otherwise the cache gets reset anyway
+        // Since there was no cache entry for this, store the resolution, but only if there are no
+        // post-conditions to execute, otherwise the cache gets reset anyway. This means we can
+        // never store an entry that would execute post-conditions.
         if post_conditions.is_empty() {
             cache.insert(CacheEntry {
                 key: CacheKey {
@@ -263,10 +247,7 @@ pub(crate) fn resolve(operation: usize, uid: usize, object: usize) -> Result<boo
                     object,
                     env_attr: env_attr.clone(GFP_NOWAIT)?,
                 },
-                value: CacheValue {
-                    resolution,
-                    post_condition_indices,
-                },
+                value: CacheValue { resolution },
             });
         }
 
