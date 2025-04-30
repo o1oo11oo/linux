@@ -6,7 +6,8 @@
 
 use kernel::{
     alloc::arrayvec::ArrayVec,
-    bindings,
+    bindings, c_str,
+    crypto::hash::{Shash, ShashDesc},
     fs::LocalFile,
     lru::LRUCache,
     prelude::*,
@@ -20,7 +21,7 @@ use kernel::{
 
 use crate::{
     epp, helpers, pip,
-    policy::{self, Attributions, Policy},
+    policy::{self, Policy},
     CACHE_SIZE, MAX_POST_CONDITIONS, PROTECTED_PATH,
 };
 
@@ -43,11 +44,7 @@ struct CacheEntry {
 }
 
 struct CacheKey {
-    operation: usize,
-    uid: usize,
-    object: usize,
-    // TODO: add Arc
-    env_attr: Attributions,
+    hash: [u8; 32],
 }
 
 struct CacheValue {
@@ -155,6 +152,11 @@ pub(crate) fn file_permission(file: &LocalFile, mask: i32) -> Result<bool> {
 /// rules could allow an access, all of them are checked and all associated post-conditions are
 /// executed.
 pub(crate) fn resolve(operation: usize, uid: usize, object: usize) -> Result<bool> {
+    // Initialize hasher before entering critical sections
+    let hash = Shash::new(c_str!("sha256"), 0, 0)?;
+    let mut hash_state = ShashDesc::new(&hash, GFP_KERNEL)?;
+    let mut buf = [0u8; 32];
+
     // Get locks for the attribute stores and for the cache before entering RCU read critical
     // section as to not block during it
     let mut user_attr_guard = pip::USER_ATTRIBUTES.lock();
@@ -197,13 +199,15 @@ pub(crate) fn resolve(operation: usize, uid: usize, object: usize) -> Result<boo
     let mut resolution = false;
     let mut cached;
 
+    // Calculate cache key
+    hash_state.update(&operation.to_ne_bytes())?;
+    hash_state.update(&uid.to_ne_bytes())?;
+    hash_state.update(&object.to_ne_bytes())?;
+    hash_state.update(env_attr.as_bytes())?;
+    hash_state.finalize(&mut buf)?;
+
     // Check the cache for previous resolutions
-    if let Some(entry) = cache.find(|e| {
-        e.key.operation == operation
-            && e.key.uid == uid
-            && e.key.object == object
-            && e.key.env_attr == *env_attr
-    }) {
+    if let Some(entry) = cache.find(|e| e.key.hash == buf) {
         // We found a cache entry, retrieve resolutions and post-conditions from there
         cached = true;
         resolution = entry.value.resolution;
@@ -266,12 +270,7 @@ pub(crate) fn resolve(operation: usize, uid: usize, object: usize) -> Result<boo
     // Since the cache is not hash-based, it does not detect duplicates
     if !cached {
         cache.insert(CacheEntry {
-            key: CacheKey {
-                operation,
-                uid,
-                object,
-                env_attr: env_attr.clone(GFP_NOWAIT)?,
-            },
+            key: CacheKey { hash: buf },
             value: CacheValue {
                 resolution,
                 post_condition_indices,

@@ -591,6 +591,20 @@ impl Attributions {
         })
     }
 
+    pub(crate) fn as_bytes(&self) -> &[u8] {
+        let data = self.map.as_ptr().cast();
+        let len = self.map.len()
+            * (core::mem::size_of::<Option<NonZeroU32>>() / core::mem::size_of::<u8>());
+        // SAFETY:
+        // - data is non-null because it comes from a Vec allocation
+        // - data is aligned for u8 because Option<NonZeroU32> has stricter requirements
+        // - data is valid for reads of len because it is the amount of items the Vec holds times 4,
+        //   which is the size difference between Option<NonZeroU32> and u8
+        // - Option<NonZeroU32> can be interpreted as 4 u8 values since every bit pattern is valid
+        //   for both, None uses the single niche NonZeroU32 provides
+        unsafe { core::slice::from_raw_parts(data, len) }
+    }
+
     // Since this might be called from within an RCU read critical section,
     // allow specifying the flags when it is used instead of just using
     // GFP_KERNEL by default.
