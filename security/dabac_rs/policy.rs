@@ -585,12 +585,16 @@ impl Attributions {
         self.set(identifier, None, flags)
     }
 
+    // Not used in all variants
+    #[allow(dead_code)]
     pub(crate) fn clone(&self, flags: Flags) -> Result<Self> {
         Ok(Attributions {
             map: vec_clone(&self.map, flags)?,
         })
     }
 
+    // Not used in all variants
+    #[allow(dead_code)]
     pub(crate) fn as_bytes(&self) -> &[u8] {
         let data = self.map.as_ptr().cast();
         let len = self.map.len()

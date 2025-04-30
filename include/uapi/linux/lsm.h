@@ -66,7 +66,11 @@ struct lsm_ctx {
 #define LSM_ID_EVM		112
 #define LSM_ID_IPE		113
 #define LSM_ID_ABAC		114
-#define LSM_ID_DABAC_RS		115
+#define LSM_ID_DABAC_RS_NC	115
+#define LSM_ID_DABAC_RS_TLC	116
+#define LSM_ID_DABAC_RS_TLCH	117
+#define LSM_ID_DABAC_RS_FLC	118
+#define LSM_ID_DABAC_RS_FLCH	119
 
 /*
  * LSM_ATTR_XXX definitions identify different LSM attributes

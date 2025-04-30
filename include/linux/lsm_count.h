@@ -114,6 +114,11 @@
 #define ABAC_ENABLED
 #endif
 
+/*
+ * DABAC_RS has been split into five different LSMs for evaluation, which can
+ * only be enabled or disabled together. Only one of them can be loaded at a
+ * time though.
+ */
 #if IS_ENABLED(CONFIG_SECURITY_DABAC_RS)
 #define DABAC_RS_ENABLED 1,
 #else

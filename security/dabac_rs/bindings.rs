@@ -12,7 +12,7 @@
 //! replaced with a pure Rust implementation.
 
 use kernel::{
-    bindings, c_str,
+    bindings,
     ffi::*,
     fs::LocalFile,
     prelude::*,
@@ -21,10 +21,7 @@ use kernel::{
     uaccess::{UserPtr, UserSlice},
 };
 
-use crate::{pap, pdp};
-
-/// The name the LSM gets registered under.
-const NAME: &CStr = c_str!("dabac_rs");
+use crate::{bindings_variants, pdp, LSM_ID, NAME};
 
 /// The amount of hooks that get registered by this LSM.
 ///
@@ -70,7 +67,7 @@ unsafe impl Sync for SecurityHookList {}
 /// Static information about the LSM.
 static DABAC_RS_LSMID: LsmId = LsmId(Opaque::new(bindings::lsm_id {
     name: NAME.as_char_ptr(),
-    id: bindings::LSM_ID_DABAC_RS as _,
+    id: LSM_ID,
 }));
 
 /// Registers the LSM in the kernel by placing it in the `.lsm_info.init` linker
@@ -114,6 +111,12 @@ unsafe extern "C" fn init() -> c_int {
         return e.to_errno();
     }
 
+    // Signal to the securityfs that the LSM was initialized
+    // SAFETY: called only once during init
+    unsafe {
+        bindings_variants::init_done();
+    }
+
     pr_info!("Rust DABAC LSM is initialized!\n");
 
     0
@@ -155,158 +158,10 @@ unsafe extern "C" fn file_permission(file: *mut bindings::file, mask: c_int) -> 
     }
 }
 
-/// Read the currently set user attributes
-///
-/// Called from the C implementation of the dabac_rs securityfs. Small glue
-/// function that gets the data from the PAP and then copies it to userspace.
-///
-/// # Safety
-///
-/// May only be used as `read` function pointer in `struct file_operations`
-#[no_mangle]
-unsafe extern "C" fn dabac_rs_read_user_attr(
-    _file: *mut bindings::file,
-    ptr: UserPtr,
-    count: c_ulong,
-    offset: *mut c_longlong,
-) -> c_int {
-    read_str(pap::read_user_attr, ptr, count, offset)
-}
-
-/// Update the user attributes
-///
-/// Called from the C implementation of the dabac_rs securityfs. Small glue
-/// function that copies the data from userspace before delegating to the actual
-/// function in the PAP.
-///
-/// # Safety
-///
-/// May only be used as `write` function pointer in `struct file_operations`
-#[no_mangle]
-unsafe extern "C" fn dabac_rs_update_user_attr(
-    _file: *mut bindings::file,
-    ptr: UserPtr,
-    length: c_ulong,
-    _offset: *mut c_longlong,
-) -> c_int {
-    update_policy_or_attrs(pap::update_user_attr, ptr, length)
-}
-
-/// Read the currently set object attributes
-///
-/// Called from the C implementation of the dabac_rs securityfs. Small glue
-/// function that gets the data from the PAP and then copies it to userspace.
-///
-/// # Safety
-///
-/// May only be used as `read` function pointer in `struct file_operations`
-#[no_mangle]
-unsafe extern "C" fn dabac_rs_read_object_attr(
-    _file: *mut bindings::file,
-    ptr: UserPtr,
-    count: c_ulong,
-    offset: *mut c_longlong,
-) -> c_int {
-    read_str(pap::read_object_attr, ptr, count, offset)
-}
-
-/// Update the object attributes
-///
-/// Called from the C implementation of the dabac_rs securityfs. Small glue
-/// function that copies the data from userspace before delegating to the actual
-/// function in the PAP.
-///
-/// # Safety
-///
-/// May only be used as `write` function pointer in `struct file_operations`
-#[no_mangle]
-unsafe extern "C" fn dabac_rs_update_object_attr(
-    _file: *mut bindings::file,
-    ptr: UserPtr,
-    length: c_ulong,
-    _offset: *mut c_longlong,
-) -> c_int {
-    update_policy_or_attrs(pap::update_object_attr, ptr, length)
-}
-
-/// Read the currently set environmental attributes
-///
-/// Called from the C implementation of the dabac_rs securityfs. Small glue
-/// function that gets the data from the PAP and then copies it to userspace.
-///
-/// # Safety
-///
-/// May only be used as `read` function pointer in `struct file_operations`
-#[no_mangle]
-unsafe extern "C" fn dabac_rs_read_env_attr(
-    _file: *mut bindings::file,
-    ptr: UserPtr,
-    count: c_ulong,
-    offset: *mut c_longlong,
-) -> c_int {
-    read_str(pap::read_env_attr, ptr, count, offset)
-}
-
-/// Update the environmental attributes
-///
-/// Called from the C implementation of the dabac_rs securityfs. Small glue
-/// function that copies the data from userspace before delegating to the actual
-/// function in the PAP.
-///
-/// # Safety
-///
-/// May only be used as `write` function pointer in `struct file_operations`
-#[no_mangle]
-unsafe extern "C" fn dabac_rs_update_env_attr(
-    _file: *mut bindings::file,
-    ptr: UserPtr,
-    length: c_ulong,
-    _offset: *mut c_longlong,
-) -> c_int {
-    update_policy_or_attrs(pap::update_env_attr, ptr, length)
-}
-
-/// Read the currently configured policy
-///
-/// Called from the C implementation of the dabac_rs securityfs. Small glue
-/// function that gets the data from the PAP and then copies it to userspace.
-///
-/// # Safety
-///
-/// May only be used as `read` function pointer in `struct file_operations`
-#[no_mangle]
-unsafe extern "C" fn dabac_rs_read_policy(
-    _file: *mut bindings::file,
-    ptr: UserPtr,
-    count: c_ulong,
-    offset: *mut c_longlong,
-) -> c_int {
-    read_str(pap::read_policy, ptr, count, offset)
-}
-
-/// Update the policy
-///
-/// Called from the C implementation of the dabac_rs securityfs. Small glue
-/// function that copies the data from userspace before delegating to the actual
-/// function in the PAP.
-///
-/// # Safety
-///
-/// May only be used as `write` function pointer in `struct file_operations`
-#[no_mangle]
-unsafe extern "C" fn dabac_rs_update_policy(
-    _file: *mut bindings::file,
-    ptr: UserPtr,
-    length: c_ulong,
-    _offset: *mut c_longlong,
-) -> c_int {
-    update_policy_or_attrs(pap::update_policy, ptr, length)
-}
-
 /// Read a CString from user space
 ///
 /// Implemented as helper function because they all do the same.
-fn read_str(
+pub(crate) fn read_str(
     target: fn() -> Result<CString>,
     ptr: UserPtr,
     count: c_ulong,
@@ -360,7 +215,11 @@ fn read_str(
 /// represented as UserPtr (usize) in Rust. Since there is no unsafe function to
 /// create a UserPtr from an actual pointer, this is probably not the worst, but
 /// still a bit shady.
-fn update_policy_or_attrs(target: fn(&[u8]) -> Result, ptr: UserPtr, length: c_ulong) -> c_int {
+pub(crate) fn update_policy_or_attrs(
+    target: fn(&[u8]) -> Result,
+    ptr: UserPtr,
+    length: c_ulong,
+) -> c_int {
     let mut buf = KVec::new();
 
     if let Err(e) = UserSlice::new(ptr, length).read_all(&mut buf, GFP_KERNEL) {
