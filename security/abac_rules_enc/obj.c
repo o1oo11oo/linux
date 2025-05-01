@@ -34,13 +34,14 @@ static struct abac_obj *parse_line(char *line) {
 	char *path, *id_str;
 	struct abac_obj *obj;
 	obj_rule *r;
+	int rc;
 
 	obj = kcalloc(1, sizeof(struct abac_obj), GFP_KERNEL);
 	path = strsep(&line, ":");
 	strcpy(obj->path, path);
 	while ((id_str = strsep(&line, ",")) != NULL) {
 		r = kcalloc(1, sizeof(obj_rule), GFP_KERNEL);
-		kstrtouint(id_str, 10, &(r->id));
+		rc = kstrtouint(id_str, 10, &(r->id));
 		if (obj->head != NULL) {
 			r->next = obj->head;
 		}

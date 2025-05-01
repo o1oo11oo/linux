@@ -18,13 +18,14 @@ avp *parse_avp(char *avp_str) {
 	/* Parse a collection of name=value pairs separated by commas */
 	avp *head, *temp;
 	char *pair, *name;
+	int rc;
 	head = NULL;
 	while((pair = strsep(&avp_str, ",")) != NULL) {
 		name = strsep(&pair, "=");
 		temp = kcalloc(1, sizeof(avp), GFP_KERNEL);
 		temp->next = NULL;
-		kstrtoint(name, 10, &(temp->name));
-		kstrtoint(pair, 10, &(temp->value));
+		rc = kstrtoint(name, 10, &(temp->name));
+		rc = kstrtoint(pair, 10, &(temp->value));
 		if (head) {
 			temp->next = head;
 		}

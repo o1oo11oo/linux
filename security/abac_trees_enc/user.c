@@ -23,10 +23,11 @@ static struct abac_user *parse_line(char *line) {
 	/* Parse a single line in the file */
 	struct abac_user *usr;
 	char *uid_str;
+	int rc;
 
 	usr = kcalloc(1, sizeof(struct abac_user), GFP_KERNEL);
 	uid_str = strsep(&line, ":");
-	kstrtoint(uid_str, 10, &(usr->uid));
+	rc = kstrtoint(uid_str, 10, &(usr->uid));
 	usr->attrs = parse_avp(line);
 	return usr;
 }
