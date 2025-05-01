@@ -144,7 +144,7 @@ static int abac_file_permission(struct file *file, int mask)
 	struct dentry *dentry;
 	struct abac_trees_node *root;
 	avp *user_attr;
-	int decision, cached_decision;
+	int decision;
 	enum operation op;
 
 	if (recording) {
