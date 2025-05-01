@@ -67,15 +67,15 @@ static const struct file_operations policy_fops = {
 
 static void dabac_rs_mx_nc_destroy_fs(void)
 {
-	if (dabac_rs_mx_nc_user_attr_file)
+	if (!IS_ERR_OR_NULL(dabac_rs_mx_nc_user_attr_file))
 		securityfs_remove(dabac_rs_mx_nc_user_attr_file);
-	if (dabac_rs_mx_nc_obj_attr_file)
+	if (!IS_ERR_OR_NULL(dabac_rs_mx_nc_obj_attr_file))
 		securityfs_remove(dabac_rs_mx_nc_obj_attr_file);
-	if (dabac_rs_mx_nc_env_attr_file)
+	if (!IS_ERR_OR_NULL(dabac_rs_mx_nc_env_attr_file))
 		securityfs_remove(dabac_rs_mx_nc_env_attr_file);
-	if (dabac_rs_mx_nc_policy_file)
+	if (!IS_ERR_OR_NULL(dabac_rs_mx_nc_policy_file))
 		securityfs_remove(dabac_rs_mx_nc_policy_file);
-	if (dabac_rs_mx_nc_fs)
+	if (!IS_ERR_OR_NULL(dabac_rs_mx_nc_fs))
 		securityfs_remove(dabac_rs_mx_nc_fs);
 }
 
@@ -85,10 +85,10 @@ static struct dentry *dabac_rs_mx_nc_create_file(const char *filename, const str
 
 	// File is writable by everyone because the PAP checks each access with the PDP
 	f = securityfs_create_file(filename, 0666, dabac_rs_mx_nc_fs, NULL, fops);
-	if (!f) {
+	if (IS_ERR(f)) {
 		pr_err("dabac_rs_mx_nc: Failed to create file /sys/kernel/security/dabac_rs/%s", filename);
 		dabac_rs_mx_nc_destroy_fs();
-		return NULL;
+		return f;
 	}
 	pr_info("dabac_rs_mx_nc: Created file /sys/kernel/security/dabac_rs/%s", filename);
 	return f;
@@ -101,38 +101,33 @@ static int dabac_rs_mx_nc_create_fs(void)
 		return 0;
 	}
 
-	if (dabac_rs_mx_nc_fs) {
-		pr_err("dabac_rs_mx_nc: securityfs already exists, did you load multiple dabac_rs variants?");
-		return -EEXIST;
-	}
-
 	// create the root 'dabac_rs' directory
 	dabac_rs_mx_nc_fs = securityfs_create_dir("dabac_rs", NULL);
-	if (!dabac_rs_mx_nc_fs) {
+	if (IS_ERR(dabac_rs_mx_nc_fs)) {
 		pr_err("dabac_rs_mx_nc: Failed to create dabac_rs securityfs at /sys/kernel/security/dabac_rs/");
 		dabac_rs_mx_nc_destroy_fs();
-		return -1;
+		return PTR_ERR(dabac_rs_mx_nc_fs);
 	}
 
 	dabac_rs_mx_nc_user_attr_file = dabac_rs_mx_nc_create_file("user_attr", &user_attr_fops);
-	if (!dabac_rs_mx_nc_user_attr_file) {
+	if (IS_ERR(dabac_rs_mx_nc_user_attr_file)) {
 		dabac_rs_mx_nc_destroy_fs();
-		return -1;
+		return PTR_ERR(dabac_rs_mx_nc_user_attr_file);
 	}
 	dabac_rs_mx_nc_obj_attr_file = dabac_rs_mx_nc_create_file("obj_attr", &obj_attr_fops);
-	if (!dabac_rs_mx_nc_obj_attr_file) {
+	if (IS_ERR(dabac_rs_mx_nc_obj_attr_file)) {
 		dabac_rs_mx_nc_destroy_fs();
-		return -1;
+		return PTR_ERR(dabac_rs_mx_nc_obj_attr_file);
 	}
 	dabac_rs_mx_nc_env_attr_file = dabac_rs_mx_nc_create_file("env_attr", &env_attr_fops);
-	if (!dabac_rs_mx_nc_env_attr_file) {
+	if (IS_ERR(dabac_rs_mx_nc_env_attr_file)) {
 		dabac_rs_mx_nc_destroy_fs();
-		return -1;
+		return PTR_ERR(dabac_rs_mx_nc_env_attr_file);
 	}
 	dabac_rs_mx_nc_policy_file = dabac_rs_mx_nc_create_file("policy", &policy_fops);
-	if (!dabac_rs_mx_nc_policy_file) {
+	if (IS_ERR(dabac_rs_mx_nc_policy_file)) {
 		dabac_rs_mx_nc_destroy_fs();
-		return -1;
+		return PTR_ERR(dabac_rs_mx_nc_policy_file);
 	}
 
 	return 0;
