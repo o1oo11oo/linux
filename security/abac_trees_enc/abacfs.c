@@ -208,22 +208,22 @@ static const struct file_operations perf_fops = {
 
 static void destroy_abac_fs(void)
 {
-	if (abac_trees_enc_user_attr_file) {
+	if (!IS_ERR_OR_NULL(abac_trees_enc_user_attr_file)) {
 		securityfs_remove(abac_trees_enc_user_attr_file);
 	}
-	if (abac_trees_enc_obj_attr_file) {
+	if (!IS_ERR_OR_NULL(abac_trees_enc_obj_attr_file)) {
 		securityfs_remove(abac_trees_enc_obj_attr_file);
 	}
-	if (abac_trees_enc_env_attr_file) {
+	if (!IS_ERR_OR_NULL(abac_trees_enc_env_attr_file)) {
 		securityfs_remove(abac_trees_enc_env_attr_file);
 	}
-	if (abac_trees_enc_action_file) {
+	if (!IS_ERR_OR_NULL(abac_trees_enc_action_file)) {
 		securityfs_remove(abac_trees_enc_action_file);
 	}
-	if (abac_trees_enc_perf_file) {
+	if (!IS_ERR_OR_NULL(abac_trees_enc_perf_file)) {
 		securityfs_remove(abac_trees_enc_perf_file);
 	}
-	if (abac_trees_enc_abacfs) {
+	if (!IS_ERR_OR_NULL(abac_trees_enc_abacfs)) {
 		securityfs_remove(abac_trees_enc_abacfs);
 	}
 }
@@ -232,10 +232,10 @@ static struct dentry *create_file(const char *filename, const struct file_operat
 	struct dentry *f;
 	//f = securityfs_create_file(filename, 0666, abac_trees_enc_abacfs, NULL, fops);
 	f = securityfs_create_file(filename, 0777, abac_trees_enc_abacfs, NULL, fops);
-	if (!f) {
+	if (IS_ERR(f)) {
 		printk(KERN_ERR "ABAC LSM (Trees ENC): Failed to create file /sys/kernel/security/abac/%s", filename);
 		destroy_abac_fs();
-		return NULL;
+		return f;
 	}
 	printk(KERN_INFO "ABAC LSM (Trees ENC): Created file /sys/kernel/security/abac/%s", filename);
 	return f;
@@ -251,38 +251,38 @@ static int abac_create_fs(void)
 
 	// create the root 'abac' directory
 	abac_trees_enc_abacfs = securityfs_create_dir("abac", NULL);
-	if (!abac_trees_enc_abacfs) {
+	if (IS_ERR(abac_trees_enc_abacfs)) {
 		printk(KERN_ERR "ABAC LSM (Trees ENC): Failed to create abac securityfs at /sys/kernel/security/abac/");
 		destroy_abac_fs();
-		return -1;
+		return PTR_ERR(abac_trees_enc_abacfs);
 	}
 
 	abac_trees_enc_user_attr_file = create_file("user_attr", &user_attr_fops);
-	if (!abac_trees_enc_user_attr_file) {
+	if (IS_ERR(abac_trees_enc_user_attr_file)) {
 		destroy_abac_fs();
-		return -1;
+		return PTR_ERR(abac_trees_enc_user_attr_file);
 	}
 	abac_trees_enc_obj_attr_file = create_file("obj_attr", &obj_attr_fops);
-	if (!abac_trees_enc_obj_attr_file) {
+	if (IS_ERR(abac_trees_enc_obj_attr_file)) {
 		destroy_abac_fs();
-		return -1;
+		return PTR_ERR(abac_trees_enc_obj_attr_file);
 	}
 	abac_trees_enc_env_attr_file = create_file("env_attr", &env_attr_fops);
-	if (!abac_trees_enc_env_attr_file) {
+	if (IS_ERR(abac_trees_enc_env_attr_file)) {
 		destroy_abac_fs();
-		return -1;
+		return PTR_ERR(abac_trees_enc_env_attr_file);
 	}
 
 	// Performance evaluation files
 	abac_trees_enc_action_file = create_file("action", &action_fops);
-	if (!abac_trees_enc_action_file) {
+	if (IS_ERR(abac_trees_enc_action_file)) {
 		destroy_abac_fs();
-		return -1;
+		return PTR_ERR(abac_trees_enc_action_file);
 	}
 	abac_trees_enc_perf_file = create_file("perf", &perf_fops);
-	if (!abac_trees_enc_perf_file) {
+	if (IS_ERR(abac_trees_enc_perf_file)) {
 		destroy_abac_fs();
-		return -1;
+		return PTR_ERR(abac_trees_enc_perf_file);
 	}
 	printk(KERN_INFO "ABAC LSM (Trees ENC): Securityfs Initialized");
 	return 0;

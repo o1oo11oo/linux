@@ -244,25 +244,25 @@ static const struct file_operations perf_fops = {
 
 static void destroy_abac_fs(void)
 {
-	if (abac_rules_user_attr_file) {
+	if (!IS_ERR_OR_NULL(abac_rules_user_attr_file)) {
 		securityfs_remove(abac_rules_user_attr_file);
 	}
-	if (abac_rules_obj_rules_file) {
+	if (!IS_ERR_OR_NULL(abac_rules_obj_rules_file)) {
 		securityfs_remove(abac_rules_obj_rules_file);
 	}
-	if (abac_rules_env_attr_file) {
+	if (!IS_ERR_OR_NULL(abac_rules_env_attr_file)) {
 		securityfs_remove(abac_rules_env_attr_file);
 	}
-	if (abac_rules_policy_file) {
+	if (!IS_ERR_OR_NULL(abac_rules_policy_file)) {
 		securityfs_remove(abac_rules_policy_file);
 	}
-	if (abac_rules_action_file) {
+	if (!IS_ERR_OR_NULL(abac_rules_action_file)) {
 		securityfs_remove(abac_rules_action_file);
 	}
-	if (abac_rules_perf_file) {
+	if (!IS_ERR_OR_NULL(abac_rules_perf_file)) {
 		securityfs_remove(abac_rules_perf_file);
 	}
-	if (abac_rules_abacfs) {
+	if (!IS_ERR_OR_NULL(abac_rules_abacfs)) {
 		securityfs_remove(abac_rules_abacfs);
 	}
 }
@@ -270,10 +270,10 @@ static void destroy_abac_fs(void)
 static struct dentry *create_file(const char *filename, const struct file_operations *fops) {
 	struct dentry *f;
 	f = securityfs_create_file(filename, 0666, abac_rules_abacfs, NULL, fops);
-	if (!f) {
+	if (IS_ERR(f)) {
 		printk(KERN_ERR "ABAC LSM (Rules): Failed to create file /sys/kernel/security/abac/%s", filename);
 		destroy_abac_fs();
-		return NULL;
+		return f;
 	}
 	printk(KERN_INFO "ABAC LSM (Rules): Created file /sys/kernel/security/abac/%s", filename);
 	return f;
@@ -289,43 +289,43 @@ static int abac_create_fs(void)
 
 	// create the root 'abac' directory
 	abac_rules_abacfs = securityfs_create_dir("abac", NULL);
-	if (!abac_rules_abacfs) {
+	if (IS_ERR(abac_rules_abacfs)) {
 		printk(KERN_ERR "ABAC LSM (Rules): Failed to create abac securityfs at /sys/kernel/security/abac/");
 		destroy_abac_fs();
-		return -1;
+		return PTR_ERR(abac_rules_abacfs);
 	}
 
 	abac_rules_user_attr_file = create_file("user_attr", &user_attr_fops);
-	if (!abac_rules_user_attr_file) {
+	if (IS_ERR(abac_rules_user_attr_file)) {
 		destroy_abac_fs();
-		return -1;
+		return PTR_ERR(abac_rules_user_attr_file);
 	}
 	abac_rules_obj_rules_file = create_file("obj_rules", &obj_rules_fops);
-	if (!abac_rules_obj_rules_file) {
+	if (IS_ERR(abac_rules_obj_rules_file)) {
 		destroy_abac_fs();
-		return -1;
+		return PTR_ERR(abac_rules_obj_rules_file);
 	}
 	abac_rules_env_attr_file = create_file("env_attr", &env_attr_fops);
-	if (!abac_rules_env_attr_file) {
+	if (IS_ERR(abac_rules_env_attr_file)) {
 		destroy_abac_fs();
-		return -1;
+		return PTR_ERR(abac_rules_env_attr_file);
 	}
 	abac_rules_policy_file = create_file("policy", &policy_fops);
-	if (!abac_rules_policy_file) {
+	if (IS_ERR(abac_rules_policy_file)) {
 		destroy_abac_fs();
-		return -1;
+		return PTR_ERR(abac_rules_policy_file);
 	}
 
 	// Performance evaluation files
 	abac_rules_action_file = create_file("action", &action_fops);
-	if (!abac_rules_action_file) {
+	if (IS_ERR(abac_rules_action_file)) {
 		destroy_abac_fs();
-		return -1;
+		return PTR_ERR(abac_rules_action_file);
 	}
 	abac_rules_perf_file = create_file("perf", &perf_fops);
-	if (!abac_rules_perf_file) {
+	if (IS_ERR(abac_rules_perf_file)) {
 		destroy_abac_fs();
-		return -1;
+		return PTR_ERR(abac_rules_perf_file);
 	}
 
 	printk(KERN_INFO "ABAC LSM (Rules): Securityfs Initialized");
