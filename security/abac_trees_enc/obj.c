@@ -7,13 +7,13 @@
 
 struct obj_hnode {
 	char path[PATH_MAX];
-	struct node *root;
+	struct abac_trees_enc_node *root;
 	struct hlist_node node;
 };
 
 struct abac_obj {
 	char path[PATH_MAX];
-	struct node *root;
+	struct abac_trees_enc_node *root;
 };
 
 #define OBJ_BUCKETS 10 // (2 ^ 10 = 1024 buckets)
@@ -67,7 +67,7 @@ static struct abac_obj *parse_line(char *line) {
 	/* Parse a line in the input file */
 	struct abac_obj *head;
 	node_cont *nc;
-	struct node *root, *child, **nodes;
+	struct abac_trees_enc_node *root, *child, **nodes;
 	branch *b;
 	char *path, *n_str, *node_str;
 	int n, rc;
@@ -80,14 +80,14 @@ static struct abac_obj *parse_line(char *line) {
 	// extract number of nodes and create nodes array
 	n_str = strsep(&line, "|");
 	rc = kstrtoint(n_str, 10, &n);
-	nodes = kcalloc(n, sizeof(struct node*), GFP_KERNEL);
+	nodes = kcalloc(n, sizeof(struct abac_trees_enc_node*), GFP_KERNEL);
 	//printk("Line: %s\n", line);
 	//printk("Path: %s - Nodes: %d\n", head->path, n);
 
 	// extract the root node
 	node_str = strsep(&line, "|");
 	nc = parse_node(node_str, 1);
-	root = kcalloc(1, sizeof(struct node), GFP_KERNEL);
+	root = kcalloc(1, sizeof(struct abac_trees_enc_node), GFP_KERNEL);
 	root->attr = nc->attr;
 	nodes[0] = root;
 	kfree(nc);
@@ -96,7 +96,7 @@ static struct abac_obj *parse_line(char *line) {
 	while((node_str = strsep(&line, "|")) != NULL) {
 		nc = parse_node(node_str, 0);
 		// create new child node
-		child = kcalloc(1, sizeof(struct node), GFP_KERNEL);
+		child = kcalloc(1, sizeof(struct abac_trees_enc_node), GFP_KERNEL);
 		child->head = NULL;
 		child->attr = nc->attr;
 		child->op = nc->op;
@@ -142,11 +142,11 @@ void parse_obj_attr(char *data) {
 	}
 }
 
-struct node *get_obj_tree(char *path) {
+struct abac_trees_enc_node *get_obj_tree(char *path) {
 	/* Get object attributes tree mapped to a path */
 	struct obj_hnode *cur;
 	u32 key = simple_hash(path);
-	struct node *root = NULL;
+	struct abac_trees_enc_node *root = NULL;
 	hash_for_each_possible(obj_attr_map, cur, node, key) {
 		/* Multiple paths can hash to the same bucket, so compare paths */
 		if (strcmp(path, cur->path)) {
@@ -158,7 +158,7 @@ struct node *get_obj_tree(char *path) {
 	return root;
 }
 
-static void clear_attr_tree(struct node *root) {
+static void clear_attr_tree(struct abac_trees_enc_node *root) {
 	branch *b, *to_free;
 	if (root == NULL) {
 		return ;
@@ -184,7 +184,7 @@ void clear_obj_attrs(void) {
 }
 
 
-void print_attr_tree(struct node *root) {
+void print_attr_tree(struct abac_trees_enc_node *root) {
 	branch *cursor;
 
 	if (root == NULL) {

@@ -28,7 +28,7 @@ char *get_full_name(struct file *file, char *buf, int buflen)
 	return ret;
 }
 
-static struct node *get_child(avp *user_attrs, struct node *n) {
+static struct abac_trees_enc_node *get_child(avp *user_attrs, struct abac_trees_enc_node *n) {
 	/*
 	 * Find the child node corresponding to the value of user or environmental attribute
 	 */
@@ -69,8 +69,8 @@ static struct node *get_child(avp *user_attrs, struct node *n) {
 	return NULL;
 }
 
-static int resolve_r(avp *user_attr, struct node *n, enum operation op) {
-	struct node *child;
+static int resolve_r(avp *user_attr, struct abac_trees_enc_node *n, enum operation op) {
+	struct abac_trees_enc_node *child;
 	/* Recursive helper method for resolve() */
 	if (n->attr == -1) {
 		/* n is a leaf, so check only operation */
@@ -95,10 +95,10 @@ static int resolve_r(avp *user_attr, struct node *n, enum operation op) {
 	return resolve_r(user_attr, child, op);
 }
 
-static int resolve(avp *user_attr, struct node *obj_root, enum operation op){
+static int resolve(avp *user_attr, struct abac_trees_enc_node *obj_root, enum operation op){
 	/* Resolve access request using 
 	 * 1. User attributes (*user_attr)
-	 * 2. Root of the object attribute tree (struct node *obj_root)
+	 * 2. Root of the object attribute tree (struct abac_trees_enc_node *obj_root)
 	 * 3. Current environmental attributes (avp *env_attr -> from abacfs)
 	 * 4. Access operation (READ or MODIFY)
 	 */
@@ -139,7 +139,7 @@ static int abac_file_permission(struct file *file, int mask)
 	unsigned int uid;
 	char *path, *buff;
 	struct dentry *dentry;
-	struct node *root;
+	struct abac_trees_enc_node *root;
 	avp *user_attr;
 	int decision;
 	enum operation op;
