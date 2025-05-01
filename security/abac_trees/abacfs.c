@@ -249,6 +249,11 @@ static struct dentry *create_file(const char *filename, const struct file_operat
 /* create the abac filesystem */
 static int abac_create_fs(void)
 {
+	if (!abac_trees_initialized) {
+		pr_info("ABAC LSM (Trees): LSM was not initialized, not loading securityfs");
+		return 0;
+	}
+
 	// create the root 'abac' directory
 	abac_trees_abacfs = securityfs_create_dir("abac", NULL);
 	if (!abac_trees_abacfs) {

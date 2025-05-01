@@ -12,6 +12,9 @@
 static const char* secured_dir = "/home/abac_lsm/";
 static const int secured_dir_len = 15;
 
+// Track if the LSM was loaded and finished initializing
+int abac_trees_initialized;
+
 // Check if path is secured
 static int is_secured(char *accessed_path)
 {
@@ -234,6 +237,7 @@ static int __init abac_init(void)
 {
 	security_add_hooks(abac_hooks, ARRAY_SIZE(abac_hooks), &abac_lsmid);
 	printk(KERN_INFO "ABAC LSM (Trees): Initialized.\n Files in %s are protected by ABAC policy\n", secured_dir);
+	abac_trees_initialized = 1;
 	return 0;
 }
 

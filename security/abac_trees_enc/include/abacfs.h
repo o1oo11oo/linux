@@ -7,6 +7,9 @@
 #include "user.h"
 #include "obj.h"
 
+/* Check whether the LSM was initialized successfully */
+extern int abac_trees_enc_initialized;
+
 /* Pointer to the environment attribute list. Initialized in abacfs */
 extern avp *abac_trees_enc_env_attr;
 

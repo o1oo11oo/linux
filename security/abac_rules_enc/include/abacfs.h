@@ -8,6 +8,9 @@
 #include "obj.h"
 #include "policy.h"
 
+/* Check whether the LSM was initialized successfully */
+extern int abac_rules_enc_initialized;
+
 /* Pointer to the environment attribute list. Initialized in abacfs */
 extern avp *abac_rules_enc_env_attr;
 
