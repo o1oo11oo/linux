@@ -206,15 +206,19 @@ static int abac_file_permission(struct file *file, int mask)
 }
 
 // The hooks we wish to be installed.
-static struct security_hook_list abac_hooks[] __lsm_ro_after_init = {
+static struct security_hook_list abac_hooks[] __ro_after_init = {
 	LSM_HOOK_INIT(file_permission, abac_file_permission),
 };
 
+static const struct lsm_id abac_lsmid = {
+	.name = "abac",
+	.id = LSM_ID_ABAC,
+};
 
 // Initialize our module.
 static int __init abac_init(void)
 {
-	security_add_hooks(abac_hooks, ARRAY_SIZE(abac_hooks), "abac");
+	security_add_hooks(abac_hooks, ARRAY_SIZE(abac_hooks), &abac_lsmid);
 	printk(KERN_INFO "ABAC LSM: Initialized.\n Files in %s are protected by ABAC policy\n", secured_dir);
 	return 0;
 }

@@ -103,6 +103,18 @@
 #endif
 
 /*
+* ABAC LSM is technically four individual LSMs, but all use the same "abac" name
+*/
+#if IS_ENABLED(CONFIG_SECURITY_ABAC_RULES) ||		\
+	IS_ENABLED(CONFIG_SECURITY_ABAC_RULES_ENC) ||	\
+	IS_ENABLED(CONFIG_SECURITY_ABAC_TREES) ||	\
+	IS_ENABLED(CONFIG_SECURITY_ABAC_TREES_ENC)
+#define ABAC_ENABLED 1,
+#else
+#define ABAC_ENABLED
+#endif
+
+/*
  *  There is a trailing comma that we need to be accounted for. This is done by
  *  using a skipped argument in __COUNT_LSMS
  */
@@ -124,7 +136,8 @@
 		LANDLOCK_ENABLED	\
 		IMA_ENABLED		\
 		EVM_ENABLED		\
-		IPE_ENABLED)
+		IPE_ENABLED		\
+		ABAC_ENABLED)
 
 #else
 
