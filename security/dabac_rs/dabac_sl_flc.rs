@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: GPL-2.0
 
-//! Rust DABAC LSM, no caching variant (NC).
+//! Rust DABAC LSM, formula level caching variant (FLC).
 //!
 //! Rust-based LSM that implements a dynamic ABAC policy.
 
@@ -11,13 +11,13 @@
 #![allow(clippy::incompatible_msrv)]
 
 mod bindings;
-#[path = "no_caching/bindings_nc.rs"]
+#[path = "formula_level_caching/bindings_sl_flc.rs"]
 mod bindings_variants;
 mod epp;
 mod expr;
 mod helpers;
 mod pap;
-#[path = "no_caching/pdp_nc.rs"]
+#[path = "formula_level_caching/pdp_flc.rs"]
 mod pdp;
 mod pip;
 mod policy;
@@ -25,10 +25,10 @@ mod policy;
 use kernel::{c_str, prelude::*};
 
 /// The name the LSM gets registered under.
-const NAME: &CStr = c_str!("dabac_rs_nc");
+const NAME: &CStr = c_str!("dabac_rs_sl_flc");
 
 /// The ID of the LSM in the kernel
-const LSM_ID: u64 = kernel::bindings::LSM_ID_DABAC_RS_NC as _;
+const LSM_ID: u64 = kernel::bindings::LSM_ID_DABAC_RS_SL_FLC as _;
 
 /// Prefix to appear before log messages printed from within this crate.
 const __LOG_PREFIX: &[u8] = NAME.as_bytes_with_nul();
@@ -38,6 +38,9 @@ const PROTECTED_PATH: &CStr = c_str!("/home/dabac_rs/");
 
 /// The maximum amount of post-conditions that can be executed for one operation.
 const MAX_POST_CONDITIONS: usize = 32;
+
+/// The number of entries the cache can hold, same as SELinux's AVC.
+const CACHE_SIZE: usize = 512;
 
 fn init() -> Result {
     // The PDP needs to be initialized first so that the initial policy is available for the PIP to
@@ -55,6 +58,6 @@ fn init() -> Result {
 #[macro_export]
 macro_rules! global_lock_inner {
     () => {
-        ::kernel::sync::lock::mutex::MutexBackend
+        ::kernel::sync::lock::spinlock::SpinLockBackend
     };
 }

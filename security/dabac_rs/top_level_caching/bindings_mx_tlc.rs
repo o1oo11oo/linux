@@ -1,8 +1,8 @@
 // SPDX-License-Identifier: GPL-2.0
 
-//! Variant-dependant bindings for Rust DABAC LSM (NC).
+//! Variant-dependant bindings for Rust DABAC LSM (MX-TLC).
 //!
-//! Variant: no caching (NC)
+//! Variant: mutexes, top level caching (MX-TLC)
 
 use kernel::{bindings, ffi::*, uaccess::UserPtr};
 
@@ -12,7 +12,7 @@ use crate::{
 };
 
 extern "C" {
-    fn dabac_rs_nc_init_done();
+    fn dabac_rs_mx_tlc_init_done();
 }
 
 /// Signal the securityfs that the LSM was initialized
@@ -23,7 +23,7 @@ extern "C" {
 pub(crate) unsafe fn init_done() {
     // SAFETY: only called during init, no other requirements for FFI call
     unsafe {
-        dabac_rs_nc_init_done();
+        dabac_rs_mx_tlc_init_done();
     }
 }
 
@@ -36,7 +36,7 @@ pub(crate) unsafe fn init_done() {
 ///
 /// May only be used as `read` function pointer in `struct file_operations`
 #[no_mangle]
-unsafe extern "C" fn dabac_rs_nc_read_user_attr(
+unsafe extern "C" fn dabac_rs_mx_tlc_read_user_attr(
     _file: *mut bindings::file,
     ptr: UserPtr,
     count: c_ulong,
@@ -55,7 +55,7 @@ unsafe extern "C" fn dabac_rs_nc_read_user_attr(
 ///
 /// May only be used as `write` function pointer in `struct file_operations`
 #[no_mangle]
-unsafe extern "C" fn dabac_rs_nc_update_user_attr(
+unsafe extern "C" fn dabac_rs_mx_tlc_update_user_attr(
     _file: *mut bindings::file,
     ptr: UserPtr,
     length: c_ulong,
@@ -73,7 +73,7 @@ unsafe extern "C" fn dabac_rs_nc_update_user_attr(
 ///
 /// May only be used as `read` function pointer in `struct file_operations`
 #[no_mangle]
-unsafe extern "C" fn dabac_rs_nc_read_object_attr(
+unsafe extern "C" fn dabac_rs_mx_tlc_read_object_attr(
     _file: *mut bindings::file,
     ptr: UserPtr,
     count: c_ulong,
@@ -92,7 +92,7 @@ unsafe extern "C" fn dabac_rs_nc_read_object_attr(
 ///
 /// May only be used as `write` function pointer in `struct file_operations`
 #[no_mangle]
-unsafe extern "C" fn dabac_rs_nc_update_object_attr(
+unsafe extern "C" fn dabac_rs_mx_tlc_update_object_attr(
     _file: *mut bindings::file,
     ptr: UserPtr,
     length: c_ulong,
@@ -110,7 +110,7 @@ unsafe extern "C" fn dabac_rs_nc_update_object_attr(
 ///
 /// May only be used as `read` function pointer in `struct file_operations`
 #[no_mangle]
-unsafe extern "C" fn dabac_rs_nc_read_env_attr(
+unsafe extern "C" fn dabac_rs_mx_tlc_read_env_attr(
     _file: *mut bindings::file,
     ptr: UserPtr,
     count: c_ulong,
@@ -129,7 +129,7 @@ unsafe extern "C" fn dabac_rs_nc_read_env_attr(
 ///
 /// May only be used as `write` function pointer in `struct file_operations`
 #[no_mangle]
-unsafe extern "C" fn dabac_rs_nc_update_env_attr(
+unsafe extern "C" fn dabac_rs_mx_tlc_update_env_attr(
     _file: *mut bindings::file,
     ptr: UserPtr,
     length: c_ulong,
@@ -147,7 +147,7 @@ unsafe extern "C" fn dabac_rs_nc_update_env_attr(
 ///
 /// May only be used as `read` function pointer in `struct file_operations`
 #[no_mangle]
-unsafe extern "C" fn dabac_rs_nc_read_policy(
+unsafe extern "C" fn dabac_rs_mx_tlc_read_policy(
     _file: *mut bindings::file,
     ptr: UserPtr,
     count: c_ulong,
@@ -166,7 +166,7 @@ unsafe extern "C" fn dabac_rs_nc_read_policy(
 ///
 /// May only be used as `write` function pointer in `struct file_operations`
 #[no_mangle]
-unsafe extern "C" fn dabac_rs_nc_update_policy(
+unsafe extern "C" fn dabac_rs_mx_tlc_update_policy(
     _file: *mut bindings::file,
     ptr: UserPtr,
     length: c_ulong,

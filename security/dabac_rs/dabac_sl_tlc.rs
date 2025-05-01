@@ -11,7 +11,7 @@
 #![allow(clippy::incompatible_msrv)]
 
 mod bindings;
-#[path = "top_level_caching/bindings_tlc.rs"]
+#[path = "top_level_caching/bindings_sl_tlc.rs"]
 mod bindings_variants;
 mod epp;
 mod expr;
@@ -25,10 +25,10 @@ mod policy;
 use kernel::{c_str, prelude::*};
 
 /// The name the LSM gets registered under.
-const NAME: &CStr = c_str!("dabac_rs_tlc");
+const NAME: &CStr = c_str!("dabac_rs_sl_tlc");
 
 /// The ID of the LSM in the kernel
-const LSM_ID: u64 = kernel::bindings::LSM_ID_DABAC_RS_TLC as _;
+const LSM_ID: u64 = kernel::bindings::LSM_ID_DABAC_RS_SL_TLC as _;
 
 /// Prefix to appear before log messages printed from within this crate.
 const __LOG_PREFIX: &[u8] = NAME.as_bytes_with_nul();
@@ -58,6 +58,6 @@ fn init() -> Result {
 #[macro_export]
 macro_rules! global_lock_inner {
     () => {
-        ::kernel::sync::lock::mutex::MutexBackend
+        ::kernel::sync::lock::spinlock::SpinLockBackend
     };
 }

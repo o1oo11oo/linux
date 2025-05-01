@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: GPL-2.0
 
-//! Rust DABAC LSM, formula level caching variant (FLC).
+//! Rust DABAC LSM, top level caching with hashing variant (TLCH).
 //!
 //! Rust-based LSM that implements a dynamic ABAC policy.
 
@@ -11,13 +11,13 @@
 #![allow(clippy::incompatible_msrv)]
 
 mod bindings;
-#[path = "formula_level_caching/bindings_flc.rs"]
+#[path = "top_level_caching/bindings_sl_tlch.rs"]
 mod bindings_variants;
 mod epp;
 mod expr;
 mod helpers;
 mod pap;
-#[path = "formula_level_caching/pdp_flc.rs"]
+#[path = "top_level_caching/pdp_tlch.rs"]
 mod pdp;
 mod pip;
 mod policy;
@@ -25,10 +25,10 @@ mod policy;
 use kernel::{c_str, prelude::*};
 
 /// The name the LSM gets registered under.
-const NAME: &CStr = c_str!("dabac_rs_flc");
+const NAME: &CStr = c_str!("dabac_rs_sl_tlch");
 
 /// The ID of the LSM in the kernel
-const LSM_ID: u64 = kernel::bindings::LSM_ID_DABAC_RS_FLC as _;
+const LSM_ID: u64 = kernel::bindings::LSM_ID_DABAC_RS_SL_TLCH as _;
 
 /// Prefix to appear before log messages printed from within this crate.
 const __LOG_PREFIX: &[u8] = NAME.as_bytes_with_nul();
@@ -58,6 +58,6 @@ fn init() -> Result {
 #[macro_export]
 macro_rules! global_lock_inner {
     () => {
-        ::kernel::sync::lock::mutex::MutexBackend
+        ::kernel::sync::lock::spinlock::SpinLockBackend
     };
 }
