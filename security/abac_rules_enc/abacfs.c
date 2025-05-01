@@ -280,47 +280,50 @@ static struct dentry *create_file(const char *filename, const struct file_operat
 }
 
 /* create the abac filesystem */
-static void abac_create_fs(void)
+static int abac_create_fs(void)
 {
 	// create the root 'abac' directory
 	abacfs = securityfs_create_dir("abac", NULL);
 	if (!abacfs) {
 		printk(KERN_ERR "ABAC LSM: Failed to create abac securityfs at /sys/kernel/security/abac/");
 		destroy_abac_fs();
+		return -1;
 	}
 
 	user_attr_file = create_file("user_attr", &user_attr_fops);
 	if (!user_attr_file) {
 		destroy_abac_fs();
-		return ;
+		return -1;
 	}
 	obj_rules_file = create_file("obj_rules", &obj_rules_fops);
 	if (!obj_rules_file) {
 		destroy_abac_fs();
-		return ;
+		return -1;
 	}
 	env_attr_file = create_file("env_attr", &env_attr_fops);
 	if (!env_attr_file) {
 		destroy_abac_fs();
-		return ;
+		return -1;
 	}
 	policy_file = create_file("policy", &policy_fops);
 	if (!policy_file) {
 		destroy_abac_fs();
-		return ;
+		return -1;
 	}
 
 	// Performance evaluation files
 	action_file = create_file("action", &action_fops);
 	if (!action_file) {
 		destroy_abac_fs();
-		return ;
+		return -1;
 	}
 	perf_file = create_file("perf", &perf_fops);
 	if (!perf_file) {
 		destroy_abac_fs();
-		return ;
+		return -1;
 	}
+
+	return 0;
 }
 
 fs_initcall(abac_create_fs);

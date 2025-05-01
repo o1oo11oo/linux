@@ -37,7 +37,7 @@ void insert_cache(unsigned int uid, char *path, int decision) {
 	printk("inserted into cache");
 }
 
-void clear_cache() {
+void clear_cache(void) {
 	/* Clear the cache entries. Used when ABAC data is changed from userspace */
 	int i;
 	for (i = 0; i < count; i++) {

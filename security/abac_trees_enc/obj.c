@@ -209,7 +209,7 @@ void print_attr_tree(struct abac_trees_enc_node *root) {
 	}
 }
 
-void print_obj_attrs() {
+void print_obj_attrs(void) {
 	struct obj_hnode *cur;
 	unsigned bkt;
 	printk("Printing object hashtable...");

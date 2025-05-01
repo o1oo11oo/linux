@@ -12,7 +12,7 @@ static const char* secured_dir = "/home/secured/";
 static const int secured_dir_len = 14;
 
 // Check if path is secured
-int is_secured(char *accessed_path)
+static int is_secured(char *accessed_path)
 {
 	if (strncmp(secured_dir, accessed_path, secured_dir_len) == 0) {
 		return 1;
@@ -21,12 +21,12 @@ int is_secured(char *accessed_path)
 }
 
 // get full filename
-char *get_full_name(struct file *file, char *buf, int buflen)
-{
-	struct dentry *dentry = file->f_path.dentry;
-	char *ret = dentry_path_raw(dentry, buf, buflen);
-	return ret;
-}
+// char *get_full_name(struct file *file, char *buf, int buflen)
+// {
+// 	struct dentry *dentry = file->f_path.dentry;
+// 	char *ret = dentry_path_raw(dentry, buf, buflen);
+// 	return ret;
+// }
 
 static struct abac_trees_enc_node *get_child(avp *user_attrs, struct abac_trees_enc_node *n) {
 	/*
