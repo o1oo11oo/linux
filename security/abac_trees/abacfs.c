@@ -16,6 +16,13 @@ struct dentry *abac_trees_env_attr_file;
 struct dentry *abac_trees_action_file;
 struct dentry *abac_trees_perf_file;
 
+struct dentry *abac_trees_generic_abacfs;
+struct dentry *abac_trees_generic_user_attr_file;
+struct dentry *abac_trees_generic_obj_attr_file;
+struct dentry *abac_trees_generic_env_attr_file;
+struct dentry *abac_trees_generic_action_file;
+struct dentry *abac_trees_generic_perf_file;
+
 char *abac_trees_user_attr_buf = NULL;
 char *abac_trees_obj_attr_buf = NULL;
 char *abac_trees_env_attr_buf = NULL;
@@ -231,60 +238,79 @@ static void destroy_abac_fs(void)
 	if (!IS_ERR_OR_NULL(abac_trees_abacfs)) {
 		securityfs_remove(abac_trees_abacfs);
 	}
+	if (!IS_ERR_OR_NULL(abac_trees_generic_user_attr_file)) {
+		securityfs_remove(abac_trees_generic_user_attr_file);
+	}
+	if (!IS_ERR_OR_NULL(abac_trees_generic_obj_attr_file)) {
+		securityfs_remove(abac_trees_generic_obj_attr_file);
+	}
+	if (!IS_ERR_OR_NULL(abac_trees_generic_env_attr_file)) {
+		securityfs_remove(abac_trees_generic_env_attr_file);
+	}
+	if (!IS_ERR_OR_NULL(abac_trees_generic_action_file)) {
+		securityfs_remove(abac_trees_generic_action_file);
+	}
+	if (!IS_ERR_OR_NULL(abac_trees_generic_perf_file)) {
+		securityfs_remove(abac_trees_generic_perf_file);
+	}
+	if (!IS_ERR_OR_NULL(abac_trees_generic_abacfs)) {
+		securityfs_remove(abac_trees_generic_abacfs);
+	}
 }
 
-static struct dentry *create_file(const char *filename, const struct file_operations *fops) {
+static struct dentry *create_file(struct dentry *parent, const char *parentname, const char *filename, const struct file_operations *fops) {
 	struct dentry *f;
-	//f = securityfs_create_file(filename, 0666, abac_trees_abacfs, NULL, fops);
-	f = securityfs_create_file(filename, 0777, abac_trees_abacfs, NULL, fops);
+	f = securityfs_create_file(filename, 0666, parent, NULL, fops);
 	if (IS_ERR(f)) {
-		printk(KERN_ERR "ABAC LSM (Trees): Failed to create file /sys/kernel/security/abac/%s", filename);
+		printk(KERN_ERR "ABAC LSM (Trees): Failed to create file /sys/kernel/security/%s/%s", parentname, filename);
 		destroy_abac_fs();
 		return f;
 	}
-	printk(KERN_INFO "ABAC LSM (Trees): Created file /sys/kernel/security/abac/%s", filename);
+	printk(KERN_INFO "ABAC LSM (Trees): Created file /sys/kernel/security/%s/%s", parentname, filename);
 	return f;
 }
 
 /* create the abac filesystem */
 static int abac_create_fs(void)
 {
+	const char *parentname = "abac_trees";
+
 	if (!abac_trees_initialized) {
 		pr_info("ABAC LSM (Trees): LSM was not initialized, not loading securityfs");
 		return 0;
 	}
 
 	// create the root 'abac' directory
-	abac_trees_abacfs = securityfs_create_dir("abac", NULL);
+	abac_trees_abacfs = securityfs_create_dir(parentname, NULL);
 	if (IS_ERR(abac_trees_abacfs)) {
-		printk(KERN_ERR "ABAC LSM (Trees): Failed to create abac securityfs at /sys/kernel/security/abac/");
+		printk(KERN_ERR "ABAC LSM (Trees): Failed to create abac securityfs at /sys/kernel/security/%s/", parentname);
 		destroy_abac_fs();
 		return PTR_ERR(abac_trees_abacfs);
 	}
 
-	abac_trees_user_attr_file = create_file("user_attr", &user_attr_fops);
+	abac_trees_user_attr_file = create_file(abac_trees_abacfs, parentname, "user_attr", &user_attr_fops);
 	if (IS_ERR(abac_trees_user_attr_file)) {
 		destroy_abac_fs();
 		return PTR_ERR(abac_trees_user_attr_file);
 	}
-	abac_trees_obj_attr_file = create_file("obj_attr", &obj_attr_fops);
+	abac_trees_obj_attr_file = create_file(abac_trees_abacfs, parentname, "obj_attr", &obj_attr_fops);
 	if (IS_ERR(abac_trees_obj_attr_file)) {
 		destroy_abac_fs();
 		return PTR_ERR(abac_trees_obj_attr_file);
 	}
-	abac_trees_env_attr_file = create_file("env_attr", &env_attr_fops);
+	abac_trees_env_attr_file = create_file(abac_trees_abacfs, parentname, "env_attr", &env_attr_fops);
 	if (IS_ERR(abac_trees_env_attr_file)) {
 		destroy_abac_fs();
 		return PTR_ERR(abac_trees_env_attr_file);
 	}
 
 	// Performance evaluation files
-	abac_trees_action_file = create_file("action", &action_fops);
+	abac_trees_action_file = create_file(abac_trees_abacfs, parentname, "action", &action_fops);
 	if (IS_ERR(abac_trees_action_file)) {
 		destroy_abac_fs();
 		return PTR_ERR(abac_trees_action_file);
 	}
-	abac_trees_perf_file = create_file("perf", &perf_fops);
+	abac_trees_perf_file = create_file(abac_trees_abacfs, parentname, "perf", &perf_fops);
 	if (IS_ERR(abac_trees_perf_file)) {
 		destroy_abac_fs();
 		return PTR_ERR(abac_trees_perf_file);
@@ -294,4 +320,62 @@ static int abac_create_fs(void)
 	return 0;
 }
 
+/* create the abac filesystem */
+static int abac_create_generic_fs(void)
+{
+	const char *parentname = "abac";
+
+	if (!abac_trees_initialized) {
+		pr_info("ABAC LSM (Trees): LSM was not initialized, not loading generic securityfs");
+		return 0;
+	}
+
+	if (abac_rules_initialized || abac_rules_enc_initialized || abac_trees_enc_initialized) {
+		pr_info("ABAC LSM (Trees): We are not the only ABAC LSM, not using generic paths");
+		return 0;
+	}
+
+	pr_info("ABAC LSM (Trees): We are the only ABAC LSM, using generic paths additionally");
+
+	// create the root 'abac' directory
+	abac_trees_generic_abacfs = securityfs_create_dir(parentname, NULL);
+	if (IS_ERR(abac_trees_generic_abacfs)) {
+		printk(KERN_ERR "ABAC LSM (Trees): Failed to create abac securityfs at /sys/kernel/security/%s/", parentname);
+		destroy_abac_fs();
+		return PTR_ERR(abac_trees_generic_abacfs);
+	}
+
+	abac_trees_generic_user_attr_file = create_file(abac_trees_generic_abacfs, parentname, "user_attr", &user_attr_fops);
+	if (IS_ERR(abac_trees_generic_user_attr_file)) {
+		destroy_abac_fs();
+		return PTR_ERR(abac_trees_generic_user_attr_file);
+	}
+	abac_trees_generic_obj_attr_file = create_file(abac_trees_generic_abacfs, parentname, "obj_attr", &obj_attr_fops);
+	if (IS_ERR(abac_trees_generic_obj_attr_file)) {
+		destroy_abac_fs();
+		return PTR_ERR(abac_trees_generic_obj_attr_file);
+	}
+	abac_trees_generic_env_attr_file = create_file(abac_trees_generic_abacfs, parentname, "env_attr", &env_attr_fops);
+	if (IS_ERR(abac_trees_generic_env_attr_file)) {
+		destroy_abac_fs();
+		return PTR_ERR(abac_trees_generic_env_attr_file);
+	}
+
+	// Performance evaluation files
+	abac_trees_generic_action_file = create_file(abac_trees_generic_abacfs, parentname, "action", &action_fops);
+	if (IS_ERR(abac_trees_generic_action_file)) {
+		destroy_abac_fs();
+		return PTR_ERR(abac_trees_generic_action_file);
+	}
+	abac_trees_generic_perf_file = create_file(abac_trees_generic_abacfs, parentname, "perf", &perf_fops);
+	if (IS_ERR(abac_trees_generic_perf_file)) {
+		destroy_abac_fs();
+		return PTR_ERR(abac_trees_generic_perf_file);
+	}
+
+	printk(KERN_INFO "ABAC LSM (Trees): Generic Securityfs Initialized");
+	return 0;
+}
+
 fs_initcall(abac_create_fs);
+fs_initcall(abac_create_generic_fs);
