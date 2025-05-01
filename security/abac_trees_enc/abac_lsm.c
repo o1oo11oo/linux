@@ -211,19 +211,19 @@ static struct security_hook_list abac_hooks[] __ro_after_init = {
 };
 
 static const struct lsm_id abac_lsmid = {
-	.name = "abac",
-	.id = LSM_ID_ABAC,
+	.name = "abac_trees_enc",
+	.id = LSM_ID_ABAC_TREES_ENC,
 };
 
 // Initialize our module.
 static int __init abac_init(void)
 {
 	security_add_hooks(abac_hooks, ARRAY_SIZE(abac_hooks), &abac_lsmid);
-	printk(KERN_INFO "ABAC LSM: Initialized.\n Files in %s are protected by ABAC policy\n", secured_dir);
+	printk(KERN_INFO "ABAC LSM (Trees ENC): Initialized.\n Files in %s are protected by ABAC policy\n", secured_dir);
 	return 0;
 }
 
-DEFINE_LSM(abac) = {
+DEFINE_LSM(abac_trees_enc) = {
 	.init = abac_init,
-	.name = "abac",
+	.name = "abac_trees_enc",
 };
