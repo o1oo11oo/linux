@@ -17,7 +17,7 @@ struct abac_user {
 
 #define USER_BUCKETS 8 // (2 ^ 8 = 256 buckets)
 
-DECLARE_HASHTABLE(user_attr_map, USER_BUCKETS);
+DECLARE_HASHTABLE(abac_trees_enc_user_attr_map, USER_BUCKETS);
 
 static struct abac_user *parse_line(char *line) {
 	/* Parse a single line in the file */
@@ -28,11 +28,11 @@ static struct abac_user *parse_line(char *line) {
 	usr = kcalloc(1, sizeof(struct abac_user), GFP_KERNEL);
 	uid_str = strsep(&line, ":");
 	rc = kstrtoint(uid_str, 10, &(usr->uid));
-	usr->attrs = parse_avp(line);
+	usr->attrs = abac_trees_enc_parse_avp(line);
 	return usr;
 }
 
-void parse_user_attr(char *data) {
+void abac_trees_enc_parse_user_attr(char *data) {
 	/*
 	 * Parse user attributes file
 	 * Buffer format 
@@ -44,7 +44,7 @@ void parse_user_attr(char *data) {
 	struct user_hnode *u;
 	char *line;
 
-	hash_init(user_attr_map);
+	hash_init(abac_trees_enc_user_attr_map);
 
 	while((line = strsep(&data, "\n")) != NULL) {
 		/* Ignore empty lines */
@@ -56,39 +56,39 @@ void parse_user_attr(char *data) {
 		u = kcalloc(1, sizeof(struct user_hnode), GFP_KERNEL);
 		u->uid = temp->uid;
 		u->attrs = temp->attrs;
-		hash_add(user_attr_map, &(u->node), u->uid);
+		hash_add(abac_trees_enc_user_attr_map, &(u->node), u->uid);
 		printk("Added %u to hashtable", u->uid);
 	}
 }
 
-avp *get_user_attrs(unsigned int uid) {
+avp *abac_trees_enc_get_user_attrs(unsigned int uid) {
 	/* Get user attributes mapped to a UID */
 	struct user_hnode *cur;
 	avp *attrs = NULL;
-	hash_for_each_possible(user_attr_map, cur, node, uid) {
+	hash_for_each_possible(abac_trees_enc_user_attr_map, cur, node, uid) {
 		attrs = cur->attrs;
 		break;
 	}
 	return attrs;
 }
 
-void clear_user_attrs(void) {
+void abac_trees_enc_clear_user_attrs(void) {
 	// Clear the user attributes in hash table
 	struct user_hnode *cur;
 	unsigned bkt;
 	printk("clearing user hashtable...");
-    hash_for_each(user_attr_map, bkt, cur, node) {
-		clear_avp_list(cur->attrs);
+    hash_for_each(abac_trees_enc_user_attr_map, bkt, cur, node) {
+		abac_trees_enc_clear_avp_list(cur->attrs);
 		hash_del(&(cur->node));
     }
 }
 
-void print_user_attrs(void) {
+void abac_trees_enc_print_user_attrs(void) {
 	struct user_hnode *cur;
 	unsigned bkt;
 	printk("Printing user hashtable...");
-    hash_for_each(user_attr_map, bkt, cur, node) {
+    hash_for_each(abac_trees_enc_user_attr_map, bkt, cur, node) {
 		printk("UID = %u", cur->uid);
-		print_avp(cur->attrs);
+		abac_trees_enc_print_avp(cur->attrs);
     }
 }

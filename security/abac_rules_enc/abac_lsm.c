@@ -73,7 +73,7 @@ static int resolve(avp *user_attr, obj_rule *head, enum operation op){
 	/* Resolve access request using 
 	 * 1. User attributes (*user_attr)
 	 * 2. Covering rules of the object (abac_rule *head)
-	 * 3. Current environmental attributes (avp *env_attr -> from abacfs)
+	 * 3. Current environmental attributes (avp *abac_rules_enc_env_attr -> from abacfs)
 	 * 4. Access operation (READ or MODIFY)
 	 */
 	abac_rule *r;
@@ -92,7 +92,7 @@ static int resolve(avp *user_attr, obj_rule *head, enum operation op){
 	// Iterate over covering rules
 	while (head != NULL) {
 		// Get rule from policy hash table
-		r = get_rule(head->id);
+		r = abac_rules_enc_get_rule(head->id);
 		// compare operation
 		//printk("checking operation");
 		if (check_op(op, r->op) == 0) {
@@ -113,7 +113,7 @@ static int resolve(avp *user_attr, obj_rule *head, enum operation op){
 
 		// compare env attrs
 		//printk("checking env_attrs");
-		if (check_avps(env_attr, r->env) == 0){
+		if (check_avps(abac_rules_enc_env_attr, r->env) == 0){
 			//printk("env attrs did not match");
 			head = head->next;
 			continue;
@@ -153,7 +153,7 @@ static int abac_file_permission(struct file *file, int mask)
 	int decision;
 	enum operation op;
 
-	if (recording) {
+	if (abac_rules_enc_recording) {
 		//start = ktime_get_real_ns();
 		start = ktime_get_ns();
 	}
@@ -184,32 +184,32 @@ static int abac_file_permission(struct file *file, int mask)
 	*/
 	
 	// Print user attributes
-	user_attr = get_user_attrs(uid);
+	user_attr = abac_rules_enc_get_user_attrs(uid);
 	//printk("User attributes");
-	//print_avp(user_attr);
+	//abac_rules_enc_print_avp(user_attr);
 	//printk("-----------------------------------");
 	
 	// Print environmental attrs
 	//printk("Environmental attributes");
-	//print_avp(env_attr);
+	//abac_rules_enc_print_avp(abac_rules_enc_env_attr);
 	//printk("-----------------------------------");
 
 	// Print object rules
 	//printk("Object rules");
-	r = get_obj_rule_list(path);
+	r = abac_rules_enc_get_obj_rule_list(path);
 	//printk("pointer: %u", r);
-	//print_obj_rule_list(r);
+	//abac_rules_enc_print_obj_rule_list(r);
 	//printk("-----------------------------------");
 	kfree(buff);
 
 	decision = resolve(user_attr, r, op);
 	//printk("decision: %s\n", decision == 1 ? "ALLOWED" : "DENIED");
-	if (recording) {
+	if (abac_rules_enc_recording) {
 		//end = ktime_get_real_ns();
 		end = ktime_get_ns();
 		diff = end - start;
-		prev_access_time = diff;
-		snprintf(perf_buf, 64, "%llu\n", prev_access_time);
+		abac_rules_enc_prev_access_time = diff;
+		snprintf(abac_rules_enc_perf_buf, 64, "%llu\n", abac_rules_enc_prev_access_time);
 	}
 	return decision == 1 ? 0 : -EPERM;
 }

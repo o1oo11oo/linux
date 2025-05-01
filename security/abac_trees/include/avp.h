@@ -10,8 +10,8 @@ struct avp {
     avp *next;
 };
 
-avp *parse_avp(char *);
-void print_avp(avp *);
-void clear_avp_list(avp *);
+avp *abac_trees_parse_avp(char *);
+void abac_trees_print_avp(avp *);
+void abac_trees_clear_avp_list(avp *);
 
 #endif /* _ABAC_AVP_H */

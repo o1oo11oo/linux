@@ -35,7 +35,7 @@ static struct abac_trees_enc_node *get_child(avp *user_attrs, struct abac_trees_
 	struct avp *u, *e;
 	branch *b; 
 	u = user_attrs;
-	e = env_attr;
+	e = abac_trees_enc_env_attr;
 	while (u != NULL) {
 		if (u->name == n->attr) {
 			/* If the node's attribute is found in user attributes,
@@ -99,7 +99,7 @@ static int resolve(avp *user_attr, struct abac_trees_enc_node *obj_root, enum op
 	/* Resolve access request using 
 	 * 1. User attributes (*user_attr)
 	 * 2. Root of the object attribute tree (struct abac_trees_enc_node *obj_root)
-	 * 3. Current environmental attributes (avp *env_attr -> from abacfs)
+	 * 3. Current environmental attributes (avp *abac_trees_enc_env_attr -> from abacfs)
 	 * 4. Access operation (READ or MODIFY)
 	 */
 	if (user_attr == NULL) {
@@ -144,7 +144,7 @@ static int abac_file_permission(struct file *file, int mask)
 	int decision;
 	enum operation op;
 
-	if (recording) {
+	if (abac_trees_enc_recording) {
 		//start = ktime_get_real_ns();
 		start = ktime_get_ns();
 	}
@@ -175,31 +175,31 @@ static int abac_file_permission(struct file *file, int mask)
 	*/
 	
 	// Print user attributes
-	user_attr = get_user_attrs(uid);
+	user_attr = abac_trees_enc_get_user_attrs(uid);
 	//printk("User attributes");
-	//print_avp(user_attr);
+	//abac_trees_enc_print_avp(user_attr);
 	//printk("-----------------------------------");
 	
 	// Print environmental attributes
 	//printk("Environmental attributes");
-	//print_avp(env_attr);
+	//abac_trees_enc_print_avp(abac_trees_enc_env_attr);
 	//printk("-----------------------------------");
 
 	// Print object tree
 	//printk("Object attribute tree");
-	root = get_obj_tree(path);
-	//print_attr_tree(root);
+	root = abac_trees_enc_get_obj_tree(path);
+	//abac_trees_enc_print_attr_tree(root);
 	//printk("-----------------------------------");
 	kfree(buff);
 
 	decision = resolve(user_attr, root, op);
 	//printk("decision: %s\n", decision == 0 ? "ALLOWED" : "DENIED");
-	if (recording) {
+	if (abac_trees_enc_recording) {
 		//end = ktime_get_real_ns();
 		end = ktime_get_ns();
 		diff = end - start;
-		prev_access_time = diff;
-		snprintf(perf_buf, 64, "%llu\n", prev_access_time);
+		abac_trees_enc_prev_access_time = diff;
+		snprintf(abac_trees_enc_perf_buf, 64, "%llu\n", abac_trees_enc_prev_access_time);
 	}
 
 	return decision == 0 ? 0 : -EPERM;

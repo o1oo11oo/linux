@@ -12,8 +12,8 @@ struct avp {
     avp *next;
 };
 
-avp *parse_avp(char *);
-void print_avp(avp *);
-void clear_avp_list(avp *);
+avp *abac_rules_parse_avp(char *);
+void abac_rules_print_avp(avp *);
+void abac_rules_clear_avp_list(avp *);
 
 #endif /* _ABAC_AVP_H */

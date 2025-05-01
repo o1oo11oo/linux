@@ -19,7 +19,7 @@ struct abac_obj {
 
 #define OBJ_BUCKETS 10 // (2 ^ 10 = 1024 buckets)
 
-DECLARE_HASHTABLE(obj_rule_map, OBJ_BUCKETS);
+DECLARE_HASHTABLE(abac_rules_obj_rule_map, OBJ_BUCKETS);
 
 // Calculate hashes for file paths
 static u32 simple_hash(const char *s) {
@@ -52,12 +52,12 @@ static struct abac_obj *parse_line(char *line) {
 
 /* Used by abac securityfs for parsing the obj_rules file
  * Iterate over the entire file and build a linked list of trees for each object */
-void parse_obj_rule_map(char *data) {
+void abac_rules_parse_obj_rule_map(char *data) {
 	struct abac_obj *temp;
 	struct obj_hnode *o;
 	char *line;
 
-	hash_init(obj_rule_map);
+	hash_init(abac_rules_obj_rule_map);
 
 	while((line = strsep(&data, "\n")) != NULL) {
 		/* Ignore empty lines */
@@ -69,18 +69,18 @@ void parse_obj_rule_map(char *data) {
 		o = kcalloc(1, sizeof(struct obj_hnode), GFP_KERNEL);
 		strcpy(o->path, temp->path);
 		o->head = temp->head;
-		hash_add(obj_rule_map, &(o->node), simple_hash(o->path));
+		hash_add(abac_rules_obj_rule_map, &(o->node), simple_hash(o->path));
 		printk("Added %s to hashtable", o->path);
 	}
 }
 
-obj_rule *get_obj_rule_list(char *path) {
+obj_rule *abac_rules_get_obj_rule_list(char *path) {
 	/* Get rules mapped to object at a given path */
 	struct obj_hnode *cur;
 	obj_rule *head; 
 	u32 key = simple_hash(path);
 	head = NULL;
-	hash_for_each_possible(obj_rule_map, cur, node, key) {
+	hash_for_each_possible(abac_rules_obj_rule_map, cur, node, key) {
 		/* Multiple paths can hash to the same bucket, so compare paths */
 		if (strcmp(path, cur->path)) {
 			continue;
@@ -100,29 +100,29 @@ static void clear_rule_list(obj_rule *head) {
 	}
 }
 
-void clear_obj_rule_map(void) {
+void abac_rules_clear_obj_rule_map(void) {
 	struct obj_hnode *cur;
 	unsigned bkt;
 	printk("clearing object hashtable...");
-    hash_for_each(obj_rule_map, bkt, cur, node) {
+    hash_for_each(abac_rules_obj_rule_map, bkt, cur, node) {
 		clear_rule_list(cur->head);
 		hash_del(&(cur->node));
     }
 }
 
-void print_obj_rule_list(obj_rule *r) {
+void abac_rules_print_obj_rule_list(obj_rule *r) {
 	while (r != NULL) {
 		printk("%u-", r->id);
 		r = r->next;
 	}
 }
 
-void print_obj_rule_map(void) {
+void abac_rules_print_obj_rule_map(void) {
 	struct obj_hnode *cur;
 	unsigned bkt;
 	printk("Printing object hashtable...");
-    hash_for_each(obj_rule_map, bkt, cur, node) {
+    hash_for_each(abac_rules_obj_rule_map, bkt, cur, node) {
 		printk("Path : %s", cur->path);
-		print_obj_rule_list(cur->head);
+		abac_rules_print_obj_rule_list(cur->head);
     }
 }

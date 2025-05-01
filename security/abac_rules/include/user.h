@@ -3,9 +3,9 @@
 
 #include "avp.h"
 
-void parse_user_attr(char *);
-avp *get_user_attrs(unsigned int);
-void print_user_attrs(void);
-void clear_user_attrs(void);
+void abac_rules_parse_user_attr(char *);
+avp *abac_rules_get_user_attrs(unsigned int);
+void abac_rules_print_user_attrs(void);
+void abac_rules_clear_user_attrs(void);
 
 #endif /* _ABAC_USER_H */

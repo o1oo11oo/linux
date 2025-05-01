@@ -35,8 +35,8 @@ struct node_cont {
 };
 typedef struct node_cont node_cont;
 
-void parse_obj_attr(char *);
-struct abac_trees_enc_node *get_obj_tree(char *);
-void clear_obj_attrs(void);
-void print_obj_attrs(void);
-void print_attr_tree(struct abac_trees_enc_node *);
+void abac_trees_enc_parse_obj_attr(char *);
+struct abac_trees_enc_node *abac_trees_enc_get_obj_tree(char *);
+void abac_trees_enc_clear_obj_attrs(void);
+void abac_trees_enc_print_obj_attrs(void);
+void abac_trees_enc_print_attr_tree(struct abac_trees_enc_node *);

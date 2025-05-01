@@ -2,7 +2,7 @@
 #include <linux/slab.h>
 #include "avp.h"
 
-void clear_avp_list(avp *head) 
+void abac_rules_clear_avp_list(avp *head) 
 {
 	// Free the avp linked list given by head
 	avp* cursor = head;
@@ -14,7 +14,7 @@ void clear_avp_list(avp *head)
 	}
 }
 
-avp *parse_avp(char *avp_str) {
+avp *abac_rules_parse_avp(char *avp_str) {
 	/* Parse a collection of name=value pairs separated by commas */
 	avp *head, *temp;
 	char *pair, *name;
@@ -33,7 +33,7 @@ avp *parse_avp(char *avp_str) {
 	return head;
 }
 
-void print_avp(avp *head) {
+void abac_rules_print_avp(avp *head) {
 	avp *cursor;
 	cursor = head;
 	while (cursor != NULL) {

@@ -17,7 +17,7 @@
  * time=afterhours
  */
 
-avp *parse_env_attr(char *data)
+avp *abac_rules_enc_parse_env_attr(char *data)
 {
 	avp *head, *temp;
 	char *pair, *name;
@@ -40,7 +40,7 @@ avp *parse_env_attr(char *data)
 	return head;
 }
 
-void print_env_attrs(avp *head)
+void abac_rules_enc_print_env_attrs(avp *head)
 {
 	avp *cursor;
 	if (head == NULL) {

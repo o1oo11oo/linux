@@ -9,11 +9,11 @@
 #include "policy.h"
 
 /* Pointer to the environment attribute list. Initialized in abacfs */
-extern avp *env_attr;
+extern avp *abac_rules_enc_env_attr;
 
 /* Recording performance variables. Initialized in abacfs */
-extern int recording;
-extern char perf_buf[64];
-extern u64 prev_access_time;
+extern int abac_rules_enc_recording;
+extern char abac_rules_enc_perf_buf[64];
+extern u64 abac_rules_enc_prev_access_time;
 
 #endif /* _ABAC_FS_H */

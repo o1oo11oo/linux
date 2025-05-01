@@ -3,8 +3,8 @@
 #include "policy.h"
 
 /* Array of rules and its size*/
-struct abac_rule **policy = NULL;
-unsigned int count;
+struct abac_rule **abac_rules_policy = NULL;
+unsigned int abac_rules_count;
 
 static struct abac_rule *parse_line(char *line) {
 	/* Parse a single line in the file */
@@ -19,10 +19,10 @@ static struct abac_rule *parse_line(char *line) {
 	rc = kstrtoint(id_str, 10, &(r->id));
 	// User attributes
 	section = strsep(&line, "|");
-	r->user = parse_avp(section);
+	r->user = abac_rules_parse_avp(section);
 	// Environmental attributes
 	section = strsep(&line, "|");
-	r->env = parse_avp(section);
+	r->env = abac_rules_parse_avp(section);
 	// Operation
 	if (strcmp(line, "MODIFY") == 0) {
 		r->op = ABAC_MODIFY;
@@ -32,7 +32,7 @@ static struct abac_rule *parse_line(char *line) {
 	return r;
 }
 
-void parse_policy(char *data) {
+void abac_rules_parse_policy(char *data) {
 	/*
 	 * Parses ABAC policy written to 'policy' file in securityfs
 	 * Rules are parsed and stored in an array
@@ -47,10 +47,10 @@ void parse_policy(char *data) {
 	int rc;
 
 	count_str = strsep(&data, "\n");
-	rc = kstrtouint(count_str, 10, &count);
+	rc = kstrtouint(count_str, 10, &abac_rules_count);
 	//policy = kmalloc(sizeof(struct abac_rule *), GFP_KERNEL);
-	policy = kmalloc(sizeof(struct abac_rule *) * count, GFP_KERNEL);
-	printk("Policy has %d rules", count);
+	abac_rules_policy = kmalloc(sizeof(struct abac_rule *) * abac_rules_count, GFP_KERNEL);
+	printk("Policy has %d rules", abac_rules_count);
 
 	while((line = strsep(&data, "\n")) != NULL) {
 		/* Ignore empty lines */
@@ -58,42 +58,42 @@ void parse_policy(char *data) {
 			break;
 		}
 		r = parse_line(line);
-		policy[r->id] = r;
+		abac_rules_policy[r->id] = r;
 		printk("Added rule %u to array", r->id);
 	}
 }
 
-abac_rule *get_rule(unsigned int id) {
+abac_rule *abac_rules_get_rule(unsigned int id) {
 	/* Get rule to a ID */
-	return policy[id];
+	return abac_rules_policy[id];
 }
 
-void clear_policy(void) {
+void abac_rules_clear_policy(void) {
 	// Clear the rules in policy array
 	int i;
 	printk("clearing policy array...");
-	for (i = 0; i < count; i++) {
-		clear_avp_list(policy[i]->user);
-		clear_avp_list(policy[i]->env);
+	for (i = 0; i < abac_rules_count; i++) {
+		abac_rules_clear_avp_list(abac_rules_policy[i]->user);
+		abac_rules_clear_avp_list(abac_rules_policy[i]->env);
 	}
-	count = 0;
-	kfree(policy);
-	policy = NULL;
+	abac_rules_count = 0;
+	kfree(abac_rules_policy);
+	abac_rules_policy = NULL;
 }
 
-void print_policy(void) {
+void abac_rules_print_policy(void) {
 	int i;
 	printk("Printing policy array...");
-	printk("Contains %d rules", count);
-	for (i = 0; i < count; i++) {
-		printk("ID = %u", policy[i]->id);
+	printk("Contains %d rules", abac_rules_count);
+	for (i = 0; i < abac_rules_count; i++) {
+		printk("ID = %u", abac_rules_policy[i]->id);
 		printk("User attributes");
-		print_avp(policy[i]->user);
+		abac_rules_print_avp(abac_rules_policy[i]->user);
 		printk("Environmental attributes");
-		print_avp(policy[i]->env);
+		abac_rules_print_avp(abac_rules_policy[i]->env);
 		printk("Operation");
-		if (policy[i]->op == ABAC_MODIFY) printk("MODIFY");
-		else if (policy[i]->op == ABAC_READ) printk("READ");
+		if (abac_rules_policy[i]->op == ABAC_MODIFY) printk("MODIFY");
+		else if (abac_rules_policy[i]->op == ABAC_READ) printk("READ");
 		else printk("IGNORE");
 	}
 }

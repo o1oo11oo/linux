@@ -18,7 +18,7 @@ struct abac_obj {
 
 #define OBJ_BUCKETS 10 // (2 ^ 10 = 1024 buckets)
 
-DECLARE_HASHTABLE(obj_attr_map, OBJ_BUCKETS);
+DECLARE_HASHTABLE(abac_trees_obj_attr_map, OBJ_BUCKETS);
 
 // Calculate hashes for file paths
 static u32 simple_hash(const char *s) {
@@ -120,13 +120,13 @@ static struct abac_obj *parse_line(char *line) {
 
 /* Used by abac securityfs for parsing the obj_attr file
  * Iterate over the entire file and build a linked list of trees for each object */
-void parse_obj_attr(char *data) {
+void abac_trees_parse_obj_attr(char *data) {
 
 	struct abac_obj *temp;
 	struct obj_hnode *o;
 	char *line;
 
-	hash_init(obj_attr_map);
+	hash_init(abac_trees_obj_attr_map);
 
 	while((line = strsep(&data, "\n")) != NULL) {
 		/* Ignore empty lines */
@@ -138,17 +138,17 @@ void parse_obj_attr(char *data) {
 		o = kcalloc(1, sizeof(struct obj_hnode), GFP_KERNEL);
 		strcpy(o->path, temp->path);
 		o->root = temp->root;
-		hash_add(obj_attr_map, &(o->node), simple_hash(o->path));
+		hash_add(abac_trees_obj_attr_map, &(o->node), simple_hash(o->path));
 		printk("Added %s to hashtable", o->path);
 	}
 }
 
-struct abac_trees_node *get_obj_tree(char *path) {
+struct abac_trees_node *abac_trees_get_obj_tree(char *path) {
 	/* Get object attributes tree mapped to a path */
 	struct obj_hnode *cur;
 	u32 key = simple_hash(path);
 	struct abac_trees_node *root = NULL;
-	hash_for_each_possible(obj_attr_map, cur, node, key) {
+	hash_for_each_possible(abac_trees_obj_attr_map, cur, node, key) {
 		/* Multiple paths can hash to the same bucket, so compare paths */
 		if (strcmp(path, cur->path)) {
 			continue;
@@ -174,18 +174,18 @@ static void clear_attr_tree(struct abac_trees_node *root) {
 	kfree(root);
 }
 
-void clear_obj_attrs(void) {
+void abac_trees_clear_obj_attrs(void) {
 	struct obj_hnode *cur;
 	unsigned bkt;
 	printk("clearing object hashtable...");
-    hash_for_each(obj_attr_map, bkt, cur, node) {
+    hash_for_each(abac_trees_obj_attr_map, bkt, cur, node) {
 		clear_attr_tree(cur->root);
 		hash_del(&(cur->node));
     }
 }
 
 
-void print_attr_tree(struct abac_trees_node *root) {
+void abac_trees_print_attr_tree(struct abac_trees_node *root) {
 	branch *cursor;
 
 	if (root == NULL) {
@@ -205,17 +205,17 @@ void print_attr_tree(struct abac_trees_node *root) {
 	cursor = root->head;
 	while (cursor != NULL) {
 		printk("%s", cursor->value);
-		print_attr_tree(cursor->child);
+		abac_trees_print_attr_tree(cursor->child);
 		cursor = cursor->next;
 	}
 }
 
-void print_obj_attrs(void) {
+void abac_trees_print_obj_attrs(void) {
 	struct obj_hnode *cur;
 	unsigned bkt;
 	printk("Printing object hashtable...");
-    hash_for_each(obj_attr_map, bkt, cur, node) {
+    hash_for_each(abac_trees_obj_attr_map, bkt, cur, node) {
 		printk("Path : %s", cur->path);
-		print_attr_tree(cur->root);
+		abac_trees_print_attr_tree(cur->root);
     }
 }

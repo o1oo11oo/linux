@@ -8,7 +8,7 @@
 #include "user.h"
 
 /* Pointer to the abac policy. Initialized in abacfs */
-extern abac_policy *policy;
+extern abac_policy *abac_trees_policy;
 
 /* Pointer to the user attribute list. Initialized in abacfs */
 extern abac_user *user_attr;
@@ -17,6 +17,6 @@ extern abac_user *user_attr;
 extern abac_obj *obj_attr;
 
 /* Pointer to the environment attribute list. Initialized in abacfs */
-extern avp *env_attr;
+extern avp *abac_trees_env_attr;
 
 #endif /* _ABAC_FS_H */

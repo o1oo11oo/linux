@@ -11,9 +11,9 @@ struct abac_rule {
 	enum operation op;
 };
 
-void parse_policy(char *);
-abac_rule *get_rule(unsigned int );
-void print_policy(void);
-void clear_policy(void);
+void abac_rules_parse_policy(char *);
+abac_rule *abac_rules_get_rule(unsigned int );
+void abac_rules_print_policy(void);
+void abac_rules_clear_policy(void);
 
 #endif /* _ABAC_POLICY_H */

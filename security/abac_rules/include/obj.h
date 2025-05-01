@@ -9,10 +9,10 @@ struct obj_rule {
 	obj_rule *next;
 };
 
-void parse_obj_rule_map(char *);
-obj_rule *get_obj_rule_list(char *);
-void clear_obj_rule_map(void);
-void print_obj_rule_list(obj_rule *);
-void print_obj_rule_map(void);
+void abac_rules_parse_obj_rule_map(char *);
+obj_rule *abac_rules_get_obj_rule_list(char *);
+void abac_rules_clear_obj_rule_map(void);
+void abac_rules_print_obj_rule_list(obj_rule *);
+void abac_rules_print_obj_rule_map(void);
 
 #endif /* _ABAC_OBJ_H */
