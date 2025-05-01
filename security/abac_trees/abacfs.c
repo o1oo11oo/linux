@@ -238,11 +238,11 @@ static struct dentry *create_file(const char *filename, const struct file_operat
 	//f = securityfs_create_file(filename, 0666, abac_trees_abacfs, NULL, fops);
 	f = securityfs_create_file(filename, 0777, abac_trees_abacfs, NULL, fops);
 	if (!f) {
-		printk(KERN_ERR "ABAC LSM: Failed to create file /sys/kernel/security/abac/%s", filename);
+		printk(KERN_ERR "ABAC LSM (Trees): Failed to create file /sys/kernel/security/abac/%s", filename);
 		destroy_abac_fs();
 		return NULL;
 	}
-	printk(KERN_INFO "ABAC LSM: Created file /sys/kernel/security/abac/%s", filename);
+	printk(KERN_INFO "ABAC LSM (Trees): Created file /sys/kernel/security/abac/%s", filename);
 	return f;
 }
 
@@ -257,7 +257,7 @@ static int abac_create_fs(void)
 	// create the root 'abac' directory
 	abac_trees_abacfs = securityfs_create_dir("abac", NULL);
 	if (!abac_trees_abacfs) {
-		printk(KERN_ERR "ABAC LSM: Failed to create abac securityfs at /sys/kernel/security/abac/");
+		printk(KERN_ERR "ABAC LSM (Trees): Failed to create abac securityfs at /sys/kernel/security/abac/");
 		destroy_abac_fs();
 		return -1;
 	}
@@ -289,7 +289,8 @@ static int abac_create_fs(void)
 		destroy_abac_fs();
 		return -1;
 	}
-	printk(KERN_INFO "ABAC LSM: Securityfs Initialized");
+
+	printk(KERN_INFO "ABAC LSM (Trees): Securityfs Initialized");
 	return 0;
 }
 

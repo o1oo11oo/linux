@@ -174,7 +174,7 @@ static int abac_file_permission(struct file *file, int mask)
 	}
 	op = get_op(mask);
 
-	//printk("ABAC LSM: %d accessing %s\n", uid, path);
+	//printk("ABAC LSM (Rules ENC): %d accessing %s\n", uid, path);
 	// operation
 	/*
 	if (op == ABAC_READ) {

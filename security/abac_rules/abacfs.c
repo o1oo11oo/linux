@@ -271,11 +271,11 @@ static struct dentry *create_file(const char *filename, const struct file_operat
 	struct dentry *f;
 	f = securityfs_create_file(filename, 0666, abac_rules_abacfs, NULL, fops);
 	if (!f) {
-		printk(KERN_ERR "ABAC LSM: Failed to create file /sys/kernel/security/abac/%s", filename);
+		printk(KERN_ERR "ABAC LSM (Rules): Failed to create file /sys/kernel/security/abac/%s", filename);
 		destroy_abac_fs();
 		return NULL;
 	}
-	printk(KERN_INFO "ABAC LSM: Created file /sys/kernel/security/abac/%s", filename);
+	printk(KERN_INFO "ABAC LSM (Rules): Created file /sys/kernel/security/abac/%s", filename);
 	return f;
 }
 
@@ -290,7 +290,7 @@ static int abac_create_fs(void)
 	// create the root 'abac' directory
 	abac_rules_abacfs = securityfs_create_dir("abac", NULL);
 	if (!abac_rules_abacfs) {
-		printk(KERN_ERR "ABAC LSM: Failed to create abac securityfs at /sys/kernel/security/abac/");
+		printk(KERN_ERR "ABAC LSM (Rules): Failed to create abac securityfs at /sys/kernel/security/abac/");
 		destroy_abac_fs();
 		return -1;
 	}
@@ -328,6 +328,7 @@ static int abac_create_fs(void)
 		return -1;
 	}
 
+	printk(KERN_INFO "ABAC LSM (Rules): Securityfs Initialized");
 	return 0;
 }
 
