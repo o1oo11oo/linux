@@ -11,11 +11,12 @@ static struct abac_rule *parse_line(char *line) {
 	struct abac_rule *r;
 	char *id_str;
 	char *section;
+	int rc;
 
 	r = kcalloc(1, sizeof(struct abac_rule), GFP_KERNEL);
 	r->op = ABAC_IGNORE;
 	id_str = strsep(&line, ":");
-	kstrtoint(id_str, 10, &(r->id));
+	rc = kstrtoint(id_str, 10, &(r->id));
 	// User attributes
 	section = strsep(&line, "|");
 	r->user = parse_avp(section);
@@ -43,9 +44,10 @@ void parse_policy(char *data) {
 	 */
 	struct abac_rule *r;
 	char *line, *count_str;
+	int rc;
 
 	count_str = strsep(&data, "\n");
-	kstrtouint(count_str, 10, &count);
+	rc = kstrtouint(count_str, 10, &count);
 	//policy = kmalloc(sizeof(struct abac_rule *), GFP_KERNEL);
 	policy = kmalloc(sizeof(struct abac_rule *) * count, GFP_KERNEL);
 	printk("Policy has %d rules", count);

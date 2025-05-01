@@ -32,9 +32,10 @@ static u32 simple_hash(const char *s) {
 static node_cont *parse_node(char *str, int is_root) {
 	/* Parse the a single node and return its contents via the node_cont struct */
 	char *token;
+	int rc;
 	node_cont *n = kmalloc(sizeof(struct node_cont), GFP_KERNEL);
 	token = strsep(&str, " ");
-	kstrtoint(token, 10, &(n->nid));
+	rc = kstrtoint(token, 10, &(n->nid));
 	if (is_root == 1) {
 		// if the node is root, only the first and last fields have data
 		n->pid = -1;
@@ -44,7 +45,7 @@ static node_cont *parse_node(char *str, int is_root) {
 	} else {
 		// pid
 		token = strsep(&str, " ");
-		kstrtoint(token, 10, &(n->pid));
+		rc = kstrtoint(token, 10, &(n->pid));
 		//n->pid = atoi(token);
 		// value
 		token = strsep(&str, " ");
@@ -62,7 +63,7 @@ static struct abac_obj *parse_line(char *line) {
 	struct node *root, *child, **nodes;
 	branch *b;
 	char *path, *n_str, *node_str;
-	int n;
+	int n, rc;
 	
 	head = kmalloc(sizeof(struct abac_obj), GFP_KERNEL);
 	// extract object path
@@ -72,7 +73,7 @@ static struct abac_obj *parse_line(char *line) {
 	// extract number of nodes and create nodes array
 	n_str = strsep(&line, "|");
 	//n = atoi(n_str);
-	kstrtoint(n_str, 10, &n);
+	rc = kstrtoint(n_str, 10, &n);
 	nodes = kcalloc(n, sizeof(struct node*), GFP_KERNEL);
 	//printk("Line: %s\n", line);
 	//printk("Path: %s - Nodes: %d\n", head->path, n);

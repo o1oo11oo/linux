@@ -23,6 +23,7 @@ avp *parse_env_attr(char *data)
 {
 	avp *head, *temp;
 	char *pair, *name;
+	int rc;
 	head = NULL;
 	while((pair = strsep(&data, "\n")) != NULL) {
 		if (strlen(pair) < 2) {
@@ -31,8 +32,8 @@ avp *parse_env_attr(char *data)
 		name = strsep(&pair, "=");
 		temp = kcalloc(1, sizeof(avp), GFP_KERNEL);
 		temp->next = NULL;
-		kstrtoint(name, 10, &(temp->name));
-		kstrtoint(pair, 10, &(temp->value));
+		rc = kstrtoint(name, 10, &(temp->name));
+		rc = kstrtoint(pair, 10, &(temp->value));
 		if (head) {
 			temp->next = head;
 		}
