@@ -32,5 +32,15 @@
 #define __UNROLL_18(MACRO, args...) __UNROLL_17(MACRO, args) MACRO(17, args)
 #define __UNROLL_19(MACRO, args...) __UNROLL_18(MACRO, args) MACRO(18, args)
 #define __UNROLL_20(MACRO, args...) __UNROLL_19(MACRO, args) MACRO(19, args)
+#define __UNROLL_21(MACRO, args...) __UNROLL_20(MACRO, args) MACRO(20, args)
+#define __UNROLL_22(MACRO, args...) __UNROLL_21(MACRO, args) MACRO(21, args)
+#define __UNROLL_23(MACRO, args...) __UNROLL_22(MACRO, args) MACRO(22, args)
+#define __UNROLL_24(MACRO, args...) __UNROLL_23(MACRO, args) MACRO(23, args)
+#define __UNROLL_25(MACRO, args...) __UNROLL_24(MACRO, args) MACRO(24, args)
+#define __UNROLL_26(MACRO, args...) __UNROLL_25(MACRO, args) MACRO(25, args)
+#define __UNROLL_27(MACRO, args...) __UNROLL_26(MACRO, args) MACRO(26, args)
+#define __UNROLL_28(MACRO, args...) __UNROLL_27(MACRO, args) MACRO(27, args)
+#define __UNROLL_29(MACRO, args...) __UNROLL_28(MACRO, args) MACRO(28, args)
+#define __UNROLL_30(MACRO, args...) __UNROLL_29(MACRO, args) MACRO(29, args)
 
 #endif /* __UNROLL_H */
