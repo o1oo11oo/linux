@@ -18,6 +18,7 @@ pub(crate) fn execute_postcondition(
     object_attr: &mut ObjectAttributes,
     flags: Flags,
 ) -> Result {
+    #[cfg(not(CONFIG_SECURITY_PERFORMANCE))]
     pr_info!("Executing post-condition: {post:?}");
 
     for change in &post.changes {

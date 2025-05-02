@@ -158,9 +158,11 @@ pub(crate) fn file_permission(file: &LocalFile, mask: i32) -> Result<bool> {
     let resolution = resolve(operation, uid, inode)?;
 
     if resolution {
+        #[cfg(not(CONFIG_SECURITY_PERFORMANCE))]
         pr_info!("Access granted");
         Ok(true)
     } else {
+        #[cfg(not(CONFIG_SECURITY_PERFORMANCE))]
         pr_info!("Access denied");
         Ok(false)
     }
@@ -207,6 +209,7 @@ pub(crate) fn resolve(operation: usize, uid: usize, object: usize) -> Result<boo
     // Collect post-conditions to execute them after all the pre-conditions have been checked
     let mut post_conditions = ArrayVec::<_, { MAX_POST_CONDITIONS }>::new();
 
+    #[cfg(not(CONFIG_SECURITY_PERFORMANCE))]
     pr_info!(
         "Operation {operation}: user {uid} (attr: {user_attr:?}) is trying to access {object:?} (attr: {object_attr:?}) under env {env_attr:?}"
     );
@@ -225,6 +228,7 @@ pub(crate) fn resolve(operation: usize, uid: usize, object: usize) -> Result<boo
         // We found a cache entry, retrieve resolution from there
         // Since it was stored in the cache, it cannot have any post-conditions
         resolution = entry.value.resolution;
+        #[cfg(not(CONFIG_SECURITY_PERFORMANCE))]
         pr_info!("Cache hit, resolution: {resolution}, will execute post-conditions: false");
     } else {
         // There was no cache entry matching this access, so check all rules if they allow access
@@ -254,6 +258,7 @@ pub(crate) fn resolve(operation: usize, uid: usize, object: usize) -> Result<boo
             });
         }
 
+        #[cfg(not(CONFIG_SECURITY_PERFORMANCE))]
         pr_info!(
             "Cache miss, resolution: {}, will execute post-conditions: {}",
             resolution,
@@ -275,6 +280,7 @@ pub(crate) fn resolve(operation: usize, uid: usize, object: usize) -> Result<boo
     // If we executed any post-conditions we need to reset the cache
     if !post_conditions.is_empty() {
         cache.clear();
+        #[cfg(not(CONFIG_SECURITY_PERFORMANCE))]
         pr_info!("Cache has been reset");
     }
 

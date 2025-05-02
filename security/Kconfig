@@ -240,6 +240,16 @@ source "security/abac_rules_enc/Kconfig"
 
 source "security/dabac_rs/Kconfig"
 
+config SECURITY_PERFORMANCE
+	bool "LSM performance measurements active"
+	default y
+	help
+	  This notifies the kernel, that LSM performance is measured from the
+	  outside, and disables all printing and other functionality, that could
+	  slow down policy resolution.
+
+	  This config flag only affects the LSMs evaluated for the thesis, which
+	  are SELinux, the ABAC LSMs and the dabac_rs variants.
 choice
 	prompt "First legacy 'major LSM' to be initialized"
 	default DEFAULT_SECURITY_SELINUX if SECURITY_SELINUX

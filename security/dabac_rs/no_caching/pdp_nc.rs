@@ -123,9 +123,11 @@ pub(crate) fn file_permission(file: &LocalFile, mask: i32) -> Result<bool> {
     let resolution = resolve(operation, uid, inode)?;
 
     if resolution {
+        #[cfg(not(CONFIG_SECURITY_PERFORMANCE))]
         pr_info!("Access granted");
         Ok(true)
     } else {
+        #[cfg(not(CONFIG_SECURITY_PERFORMANCE))]
         pr_info!("Access denied");
         Ok(false)
     }
@@ -172,6 +174,7 @@ pub(crate) fn resolve(operation: usize, uid: usize, object: usize) -> Result<boo
     // checked
     let mut post_conditions = ArrayVec::<_, { MAX_POST_CONDITIONS }>::new();
 
+    #[cfg(not(CONFIG_SECURITY_PERFORMANCE))]
     pr_info!(
         "Operation {operation}: user {uid} (attr: {user_attr:?}) is trying to access {object:?} (attr: {object_attr:?}) under env {env_attr:?}"
     );
@@ -190,6 +193,8 @@ pub(crate) fn resolve(operation: usize, uid: usize, object: usize) -> Result<boo
             }
         }
     }
+
+    #[cfg(not(CONFIG_SECURITY_PERFORMANCE))]
     pr_info!(
         "Resolution: {}, will execute post-conditions: {}",
         resolution,
