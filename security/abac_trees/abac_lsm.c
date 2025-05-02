@@ -15,6 +15,10 @@ static const int secured_dir_len = 15;
 // Track if the LSM was loaded and finished initializing
 int abac_trees_initialized;
 
+// Track cycle counts
+#define LSM_NAME "abac_trees"
+#include <linux/lsm_performance.h>
+
 // Check if path is secured
 static int is_secured(char *accessed_path)
 {
@@ -32,7 +36,7 @@ static int is_secured(char *accessed_path)
 // 	return ret;
 // }
 
-static struct abac_trees_node *get_child(avp *user_attrs, struct abac_trees_node *n) {
+static struct abac_trees_node *get_child(avp *user_attrs, struct abac_trees_node *n, uint64_t *cycle_counts) {
 	/*
 	 * Find the child node corresponding to the value of user or environmental attribute
 	 */
@@ -47,6 +51,7 @@ static struct abac_trees_node *get_child(avp *user_attrs, struct abac_trees_node
 			b = n->head;
 			while (b != NULL) {
 				if (strcmp(u->value, b->value) == 0) {
+					save_tsc(cycle_counts, ABAC_TREES_AFTER_CHECK_USER_ATTR);
 					//printk("Found child: %s for attr: %s", b->value, n->attr);
 					return b->child;
 				}
@@ -61,6 +66,7 @@ static struct abac_trees_node *get_child(avp *user_attrs, struct abac_trees_node
 			b = n->head;
 			while (b != NULL) {
 				if (strcmp(e->value, b->value) == 0) {
+					save_tsc(cycle_counts, ABAC_TREES_AFTER_CHECK_ENV_ATTR);
 					//printk("Found child: %s for attr: %s", e->value, n->attr);
 					return b->child;
 				}
@@ -69,37 +75,61 @@ static struct abac_trees_node *get_child(avp *user_attrs, struct abac_trees_node
 		}
 		e = e->next;
 	}
+
+	save_tsc(cycle_counts, ABAC_TREES_AFTER_CHECK_ENV_ATTR);
+
 	// branch not found
 	return NULL;
 }
 
-static int resolve_r(avp *user_attr, struct abac_trees_node *n, enum operation op) {
+static int resolve_r(avp *user_attr, struct abac_trees_node *n, enum operation op, uint64_t *cycle_counts) {
 	struct abac_trees_node *child;
+
+	save_tsc(cycle_counts, LOOP_START);
+
 	/* Recursive helper method for resolve() */
 	if (strlen(n->attr) == 0) {
 		/* n is a leaf, so check only operation */
 		if(n->op == op) {
 			//printk("matched op");
+			save_tsc(cycle_counts, ABAC_TREES_AFTER_CHECK_OP);
+
 			return 0;
 		} else if (n->op == ABAC_MODIFY && op == ABAC_READ) {
 			/* If the rule says MODIFY, then the user also has READ rights */
+			save_tsc(cycle_counts, ABAC_TREES_AFTER_CHECK_OP);
+
 			//printk("subsumed op");
 			return 0;
 		}
+
+		save_tsc(cycle_counts, ABAC_TREES_AFTER_CHECK_OP);
+
 		//printk("wrong op");
 		return 1;
 	}
-	child = get_child(user_attr, n);
+
+	save_tsc(cycle_counts, ABAC_TREES_BEFORE_GET_CHILD);
+
+	child = get_child(user_attr, n, cycle_counts);
+
+	save_tsc(cycle_counts, ABAC_TREES_AFTER_GET_CHILD);
+
 	if (!child) {
 		/* Corresponding child not found in n */
+		save_tsc(cycle_counts, ABAC_TREES_AFTER_CHECK_OP);
+
 		//printk("Child not found");
 		return 1;
 	}
+
+	save_tsc(cycle_counts, ABAC_TREES_AFTER_CHECK_CHILD);
+
 	//printk("Child found");
-	return resolve_r(user_attr, child, op);
+	return resolve_r(user_attr, child, op, cycle_counts);
 }
 
-static int resolve(avp *user_attr, struct abac_trees_node *obj_root, enum operation op){
+static int resolve(avp *user_attr, struct abac_trees_node *obj_root, enum operation op, uint64_t *cycle_counts){
 	/* Resolve access request using 
 	 * 1. User attributes (*user_attr)
 	 * 2. Root of the object attribute tree (struct abac_trees_node *obj_root)
@@ -108,6 +138,9 @@ static int resolve(avp *user_attr, struct abac_trees_node *obj_root, enum operat
 	 *
 	 * Returns 0 if decision is allowed, 1 otherwise
 	 */
+
+	save_tsc(cycle_counts, IN_RESOLVE);
+
 	if (user_attr == NULL) {
 		/* If the user doesn't have any attributes, access is DENIED */
 		return 1;
@@ -120,7 +153,10 @@ static int resolve(avp *user_attr, struct abac_trees_node *obj_root, enum operat
 		/* If not a relevant operation, allow it */
 		return 0;
 	}
-	return resolve_r(user_attr, obj_root, op);
+
+	save_tsc(cycle_counts, AFTER_NULL_CHECKS);
+
+	return resolve_r(user_attr, obj_root, op, cycle_counts);
 }
 
 static enum operation get_op(int mask) {
@@ -141,7 +177,7 @@ static enum operation get_op(int mask) {
 // File read/write hook
 static int abac_file_permission(struct file *file, int mask)
 {
-	u64 start, end, diff;
+	//u64 start, end, diff;
 	unsigned int uid;
 	char *path, *buff;
 	struct dentry *dentry;
@@ -150,10 +186,13 @@ static int abac_file_permission(struct file *file, int mask)
 	int decision;
 	enum operation op;
 
-	if (abac_trees_recording) {
+	// Cannot use a global as multiple requests might happen in parallel
+	uint64_t cycle_counts[CYCLE_COUNTS_LEN];
+
+	/*if (abac_trees_recording) {
 		//start = ktime_get_real_ns();
 		start = ktime_get_ns();
-	}
+	}*/
 	uid = current_uid().val;
 	if (uid < 1000) {
 		return 0;
@@ -166,6 +205,11 @@ static int abac_file_permission(struct file *file, int mask)
 		kfree(buff);
 		return 0;
 	}
+
+	// Start performance measurements after making sure the request actually
+	// concerns us
+	save_tsc_start(cycle_counts);
+
 	op = get_op(mask);
 
 	//printk("ABAC LSM (Trees): %d accessing %s\n", uid, path);
@@ -180,6 +224,8 @@ static int abac_file_permission(struct file *file, int mask)
 	}
 	*/
 
+	save_tsc(cycle_counts, AFTER_GET_OP);
+
 	// Check cache
 	/*
 	cached_decision = search_cache(uid, path);
@@ -187,38 +233,46 @@ static int abac_file_permission(struct file *file, int mask)
 		return cached_decision == 0 ? 0 : -EPERM;
 	}
 	*/
-	
+
 	// Print user attributes
 	user_attr = abac_trees_get_user_attrs(uid);
 	//printk("User attributes");
 	//abac_trees_print_avp(user_attr);
 	//printk("-----------------------------------");
-	
+
 	// Print env attributes
 	//printk("Environmental attributes");
 	//abac_trees_print_avp(abac_trees_env_attr);
 	//printk("-----------------------------------");
+
+	save_tsc(cycle_counts, AFTER_GET_USER_ATTR);
 
 	// Print object tree
 	//printk("Object attribute tree");
 	root = abac_trees_get_obj_tree(path);
 	//abac_trees_print_attr_tree(root);
 	//printk("-----------------------------------");
-	kfree(buff);
 
-	decision = resolve(user_attr, root, op);
+	save_tsc(cycle_counts, AFTER_GET_OBJ);
+
+	decision = resolve(user_attr, root, op, cycle_counts);
+
+	// Stop the performance measurement and print results
+	save_tsc_stop(cycle_counts);
 
 	/* insert decision into cache */
 	//insert_cache(uid, path, decision);
 
 	//printk("decision: %s\n", decision == 0 ? "ALLOWED" : "DENIED");
-	if (abac_trees_recording) {
+	/*if (abac_trees_recording) {
 		//end = ktime_get_real_ns();
 		end = ktime_get_ns();
 		diff = end - start;
 		abac_trees_prev_access_time = diff;
 		snprintf(abac_trees_perf_buf, 64, "%llu\n", abac_trees_prev_access_time);
-	}
+	}*/
+
+	kfree(buff);
 	return decision == 0 ? 0 : -EPERM;
 }
 

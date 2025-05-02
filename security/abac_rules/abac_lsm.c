@@ -14,6 +14,10 @@ static const int secured_dir_len = 15;
 // Track if the LSM was loaded and finished initializing
 int abac_rules_initialized;
 
+// Track cycle counts
+#define LSM_NAME "abac_rules"
+#include <linux/lsm_performance.h>
+
 // Check if path is secured
 static int is_secured(char *accessed_path)
 {
@@ -72,7 +76,7 @@ static int check_avps(avp *a, avp *r) {
 	return r_count == a_count;
 }
 
-static int resolve(avp *user_attr, obj_rule *head, enum operation op){
+static int resolve(avp *user_attr, obj_rule *head, enum operation op, uint64_t *cycle_counts){
 	/* Resolve access request using 
 	 * 1. User attributes (*user_attr)
 	 * 2. Covering rules of the object (abac_rule *head)
@@ -80,6 +84,9 @@ static int resolve(avp *user_attr, obj_rule *head, enum operation op){
 	 * 4. Access operation (READ or MODIFY)
 	 */
 	abac_rule *r;
+
+	save_tsc(cycle_counts, IN_RESOLVE);
+
 	if (user_attr == NULL) {
 		/* If the user doesn't have any attributes, access is DENIED */
 		return 0;
@@ -92,10 +99,18 @@ static int resolve(avp *user_attr, obj_rule *head, enum operation op){
 		/* If not a relevant operation, allow it */
 		return 1;
 	}
+
+	save_tsc(cycle_counts, AFTER_NULL_CHECKS);
+
 	// Iterate over covering rules
 	while (head != NULL) {
+		save_tsc(cycle_counts, LOOP_START);
+
 		// Get rule from policy hash table
 		r = abac_rules_get_rule(head->id);
+
+		save_tsc(cycle_counts, ABAC_RULES_AFTER_GET_RULE);
+
 		// compare operation
 		//printk("checking operation");
 		if (check_op(op, r->op) == 0) {
@@ -104,6 +119,8 @@ static int resolve(avp *user_attr, obj_rule *head, enum operation op){
 			continue;
 		}
 		//printk("operation matched");
+
+		save_tsc(cycle_counts, ABAC_RULES_AFTER_CHECK_OP);
 
 		// compare user attrs
 		//printk("checking user_attrs");
@@ -114,6 +131,8 @@ static int resolve(avp *user_attr, obj_rule *head, enum operation op){
 		}
 		//printk("user_attrs matched");
 
+		save_tsc(cycle_counts, ABAC_RULES_AFTER_CHECK_USER_ATTR);
+
 		// compare env attrs
 		//printk("checking env_attrs");
 		if (check_avps(abac_rules_env_attr, r->env) == 0){
@@ -123,9 +142,14 @@ static int resolve(avp *user_attr, obj_rule *head, enum operation op){
 		}
 		//printk("env_attrs matched");
 
+		save_tsc(cycle_counts, ABAC_RULES_AFTER_CHECK_ENV_ATTR);
+
 		// If we reached here, the current rule is satisfied
 		return 1;
 	}
+
+	save_tsc(cycle_counts, ABAC_RULES_AFTER_CHECK_ENV_ATTR);
+
 	return 0;
 }
 
@@ -147,7 +171,7 @@ static enum operation get_op(int mask) {
 // File read/write hook
 static int abac_file_permission(struct file *file, int mask)
 {
-	u64 start, end, diff;
+	//u64 start, end, diff;
 	unsigned int uid;
 	char *path, *buff;
 	struct dentry *dentry;
@@ -156,10 +180,13 @@ static int abac_file_permission(struct file *file, int mask)
 	int decision;
 	enum operation op;
 
-	if (abac_rules_recording) {
+	// Cannot use a global as multiple requests might happen in parallel
+	uint64_t cycle_counts[CYCLE_COUNTS_LEN];
+
+	/*if (abac_rules_recording) {
 		//start = ktime_get_real_ns();
 		start = ktime_get_ns();
-	}
+	}*/
 	uid = current_uid().val;
 	if (uid < 1000) {
 		return 0;
@@ -172,6 +199,11 @@ static int abac_file_permission(struct file *file, int mask)
 		kfree(buff);
 		return 0;
 	}
+
+	// Start performance measurements after making sure the request actually
+	// concerns us
+	save_tsc_start(cycle_counts);
+
 	op = get_op(mask);
 
 	//printk("ABAC LSM (Rules): %d accessing %s\n", uid, path);
@@ -185,35 +217,48 @@ static int abac_file_permission(struct file *file, int mask)
 		printk("ABAC IGNORE");
 	}
 	*/
-	
+
+	save_tsc(cycle_counts, AFTER_GET_OP);
+
 	// Print user attributes
 	user_attr = abac_rules_get_user_attrs(uid);
+
 	//printk("User attributes");
 	//abac_rules_print_avp(user_attr);
 	//printk("-----------------------------------");
-	
+
 	// Print environmental attrs
 	//printk("Environmental attributes");
 	//abac_rules_print_avp(abac_rules_env_attr);
 	//printk("-----------------------------------");
 
+	save_tsc(cycle_counts, AFTER_GET_USER_ATTR);
+
 	// Print object rules
 	//printk("Object rules");
 	r = abac_rules_get_obj_rule_list(path);
+
+	save_tsc(cycle_counts, AFTER_GET_OBJ);
+
 	//printk("pointer: %u", r);
 	//abac_rules_print_obj_rule_list(r);
 	//printk("-----------------------------------");
-	kfree(buff);
 
-	decision = resolve(user_attr, r, op);
+	decision = resolve(user_attr, r, op, cycle_counts);
 	//printk("decision: %s\n", decision == 1 ? "ALLOWED" : "DENIED");
-	if (abac_rules_recording) {
+
+	// Stop the performance measurement and print results
+	save_tsc_stop(cycle_counts);
+
+	/*if (abac_rules_recording) {
 		//end = ktime_get_real_ns();
 		end = ktime_get_ns();
 		diff = end - start;
 		abac_rules_prev_access_time = diff;
 		snprintf(abac_rules_perf_buf, 64, "%llu\n", abac_rules_prev_access_time);
-	}
+	}*/
+
+	kfree(buff);
 	return decision == 1 ? 0 : -EPERM;
 }
 
