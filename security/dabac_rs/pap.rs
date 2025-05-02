@@ -10,12 +10,19 @@ use kernel::{prelude::*, str::CString};
 
 use crate::{helpers, pdp, pip, policy::Policy};
 
+#[cfg(CONFIG_SECURITY_PERFORMANCE_KERNEL)]
+use crate::evaluation::CYCLE_COUNTS_LEN;
+
 fn check_access(operation: usize) -> Result {
     // There is no file to access, but the current policy semantics cannot handle that
     let uid = helpers::get_current_euid();
     let inode = 0;
 
-    match pdp::resolve(operation, uid, inode) {
+    // Not relevant for the evaluation, but the function expects the parameter, so we need to
+    // provide it with correct length
+    let mut cycle_counts = [0; CYCLE_COUNTS_LEN];
+
+    match pdp::resolve(operation, uid, inode, &mut cycle_counts) {
         Ok(true) => Ok(()),
         Ok(false) => Err(EPERM),
         Err(e) => Err(e),

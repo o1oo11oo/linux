@@ -250,6 +250,31 @@ config SECURITY_PERFORMANCE
 
 	  This config flag only affects the LSMs evaluated for the thesis, which
 	  are SELinux, the ABAC LSMs and the dabac_rs variants.
+
+config SECURITY_PERFORMANCE_KERNEL
+	bool "Measure LSM performance inside the kernel"
+	depends on SECURITY_PERFORMANCE
+	default y
+	help
+	  This enables in-kernel performance measuring for SELinux, the ABAC LSM
+	  variants and all the dabac_rs variants using processor timestamps
+	  (RDTSCP).
+
+	  This config flag only affects the LSMs evaluated for the thesis, which
+	  are (as mentioned) SELinux, the ABAC LSMs and the dabac_rs variants.
+
+config SECURITY_PERFORMANCE_KERNEL_PRECISE
+	bool "Measure intermediate values for LSM performance in-kernel"
+	depends on SECURITY_PERFORMANCE_KERNEL
+	default y
+	help
+	  This enables the additional collection of intermediate values for
+	  in-kernel LSM performance measurements for the ABAC LSM variants and
+	  all the dabac_rs variants using processor timestamps (RDTSCP).
+
+	  This config flag only affects the the variants of the ABAC LSM and
+	  dabac_rs, since SELinux does not collect intermediate values.
+
 choice
 	prompt "First legacy 'major LSM' to be initialized"
 	default DEFAULT_SECURITY_SELINUX if SECURITY_SELINUX

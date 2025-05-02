@@ -14,6 +14,8 @@ mod bindings;
 #[path = "no_caching/bindings_mx_nc.rs"]
 mod bindings_variants;
 mod epp;
+#[cfg(CONFIG_SECURITY_PERFORMANCE_KERNEL)]
+mod evaluation;
 mod expr;
 mod helpers;
 mod pap;

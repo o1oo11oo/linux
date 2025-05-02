@@ -26,6 +26,9 @@ use crate::{
     MAX_POST_CONDITIONS, PROTECTED_PATH,
 };
 
+#[cfg(CONFIG_SECURITY_PERFORMANCE_KERNEL)]
+use crate::evaluation::*;
+
 global_lock! {
     // SAFETY: Initialized in module initializer before first use.
     unsafe(uninit) static POLICY_WRITE_GUARD: Lock<()> = ();
@@ -107,6 +110,9 @@ pub(crate) fn notify_env_attrs_changed() {
 /// access should be allowed, Ok(false) otherwise. Errors most commonly occur on
 /// allocation failures.
 pub(crate) fn file_permission(file: &LocalFile, mask: i32) -> Result<bool> {
+    // Store the cycle counts for this request for performance measurement
+    let mut cycle_counts = [0; CYCLE_COUNTS_LEN];
+
     let full_name = helpers::file_get_full_name(file)?;
 
     // Allow everything unprotected/out of scope
@@ -114,13 +120,21 @@ pub(crate) fn file_permission(file: &LocalFile, mask: i32) -> Result<bool> {
         return Ok(true);
     }
 
+    // Start performance measurements after making sure the request actually concerns us
+    save_tsc_start(&mut cycle_counts);
+
     // Get entity identifiers for the involved subjects and objects
     let operation = get_op_from_mask(mask)?;
     let uid = helpers::get_current_euid();
     let inode = helpers::file_get_inode_number(file);
 
+    save_tsc(&mut cycle_counts, AFTER_IDENTIFIERS);
+
     // Check policy for protected files
-    let resolution = resolve(operation, uid, inode)?;
+    let resolution = resolve(operation, uid, inode, &mut cycle_counts)?;
+
+    // Stop the performance measurement and print results
+    save_tsc_stop(&mut cycle_counts);
 
     if resolution {
         #[cfg(not(CONFIG_SECURITY_PERFORMANCE))]
@@ -142,11 +156,20 @@ pub(crate) fn file_permission(file: &LocalFile, mask: i32) -> Result<bool> {
 /// If a rule matches, its post-condition is executed by the EPP, if one exists. Since multiple
 /// rules could allow an access, all of them are checked and all associated post-conditions are
 /// executed.
-pub(crate) fn resolve(operation: usize, uid: usize, object: usize) -> Result<bool> {
+pub(crate) fn resolve(
+    operation: usize,
+    uid: usize,
+    object: usize,
+    cycle_counts: &mut [u64; CYCLE_COUNTS_LEN],
+) -> Result<bool> {
+    save_tsc(cycle_counts, IN_RESOLVE);
+
     // Get locks for the attribute stores before entering RCU read critical
     // section as to not block during it
     let mut user_attr_guard = pip::USER_ATTRIBUTES.lock();
     let mut object_attr_guard = pip::OBJECT_ATTRIBUTES.lock();
+
+    save_tsc(cycle_counts, AFTER_LOCKS);
 
     // Enter RCU read critical section for policy and env attributes
     // This means we are not allowed to block anymore, so we use GFP_NOWAIT for
@@ -166,9 +189,13 @@ pub(crate) fn resolve(operation: usize, uid: usize, object: usize) -> Result<boo
         .dereference(&rcu_guard)
         .unwrap_or(&policy::EMPTY_ATTRIBUTIONS);
 
+    save_tsc(cycle_counts, AFTER_RCU);
+
     // Get the attributes relevant for this decision
     let user_attr = user_attr_guard.get(uid);
     let object_attr = object_attr_guard.get(object);
+
+    save_tsc(cycle_counts, AFTER_GET_ATTRS);
 
     // Collect post-conditions so that they can be executed after all the pre-conditions have been
     // checked
@@ -183,6 +210,8 @@ pub(crate) fn resolve(operation: usize, uid: usize, object: usize) -> Result<boo
     let rules = policy.get(operation).ok_or(EINVAL)?;
     let mut resolution = false;
 
+    save_tsc(cycle_counts, AFTER_GET_POLICY);
+
     // Check all rules if they allow access and collect all post-conditions for the ones evaluating
     // to true to execute them after all rules were checked
     for rule in rules.iter() {
@@ -193,6 +222,8 @@ pub(crate) fn resolve(operation: usize, uid: usize, object: usize) -> Result<boo
             }
         }
     }
+
+    save_tsc(cycle_counts, AFTER_PRE_CONDITIONS);
 
     #[cfg(not(CONFIG_SECURITY_PERFORMANCE))]
     pr_info!(
@@ -211,6 +242,8 @@ pub(crate) fn resolve(operation: usize, uid: usize, object: usize) -> Result<boo
             GFP_NOWAIT,
         )?;
     }
+
+    save_tsc(cycle_counts, AFTER_POST_CONDITIONS);
 
     Ok(resolution)
 }
