@@ -260,6 +260,45 @@ static int abac_file_permission(struct file *file, int mask)
 	return decision == 1 ? 0 : -EPERM;
 }
 
+extern char *abac_rules_enc_user_attr_buf;
+extern char *abac_rules_enc_obj_rules_buf;
+extern char *abac_rules_enc_env_attr_buf;
+extern char *abac_rules_enc_policy_buf;
+static int load_initial_policy(void)
+{
+	const char *initial_user_attr = "1000:0=0\n1001:0=1";
+	const char *initial_obj_rules = "/home/abac_lsm/a:0,1\n/home/abac_lsm/b:0,1";
+	const char *initial_env_attr = "0=0\n1=0";
+	const char *initial_policy = "2\n0:0=0|0=0|MODIFY\n1:0=1|0=0|READ";
+
+	abac_rules_enc_user_attr_buf = kmalloc(strlen(initial_user_attr), GFP_KERNEL);
+	if (!abac_rules_enc_user_attr_buf)
+		return -ENOMEM;
+
+	abac_rules_enc_obj_rules_buf = kmalloc(strlen(initial_obj_rules), GFP_KERNEL);
+	if (!abac_rules_enc_obj_rules_buf)
+		return -ENOMEM;
+
+	abac_rules_enc_env_attr_buf = kmalloc(strlen(initial_env_attr), GFP_KERNEL);
+	if (!abac_rules_enc_env_attr_buf)
+		return -ENOMEM;
+
+	abac_rules_enc_policy_buf = kmalloc(strlen(initial_policy), GFP_KERNEL);
+	if (!abac_rules_enc_policy_buf)
+		return -ENOMEM;
+
+	strscpy(abac_rules_enc_user_attr_buf, initial_user_attr, strlen(initial_user_attr));
+	abac_rules_enc_parse_user_attr(abac_rules_enc_user_attr_buf);
+	strscpy(abac_rules_enc_obj_rules_buf, initial_obj_rules, strlen(initial_obj_rules));
+	abac_rules_enc_parse_obj_rule_map(abac_rules_enc_obj_rules_buf);
+	strscpy(abac_rules_enc_env_attr_buf, initial_env_attr, strlen(initial_env_attr));
+	abac_rules_enc_env_attr = abac_rules_enc_parse_env_attr(abac_rules_enc_env_attr_buf);
+	strscpy(abac_rules_enc_policy_buf, initial_policy, strlen(initial_policy));
+	abac_rules_enc_parse_policy(abac_rules_enc_policy_buf);
+
+	return 0;
+}
+
 // The hooks we wish to be installed.
 static struct security_hook_list abac_hooks[] __ro_after_init = {
 	LSM_HOOK_INIT(file_permission, abac_file_permission),
@@ -274,6 +313,11 @@ static const struct lsm_id abac_lsmid = {
 static int __init abac_init(void)
 {
 	security_add_hooks(abac_hooks, ARRAY_SIZE(abac_hooks), &abac_lsmid);
+	int err = load_initial_policy();
+
+	if (err)
+		return err;
+
 	printk(KERN_INFO "ABAC LSM (Rules ENC): Initialized.\n Files in %s are protected by ABAC policy\n", secured_dir);
 	abac_rules_enc_initialized = 1;
 	return 0;

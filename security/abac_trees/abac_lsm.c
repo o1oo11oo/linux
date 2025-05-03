@@ -276,6 +276,37 @@ static int abac_file_permission(struct file *file, int mask)
 	return decision == 0 ? 0 : -EPERM;
 }
 
+extern char *abac_trees_user_attr_buf;
+extern char *abac_trees_obj_attr_buf;
+extern char *abac_trees_env_attr_buf;
+static int load_initial_policy(void)
+{
+	const char *initial_user_attr = "1000:ua_0=ua_0_v_0\n1001:ua_0=ua_0_v_1";
+	const char *initial_obj_attr = "/home/abac_lsm/a:3|0 - - ea_0|1 0 ea_0_v_0 ua_0|2 1 ua_0_v_0 MODIFY\n/home/abac_lsm/b:4|0 - - ea_0|1 0 ea_0_v_0 ua_0|2 1 ua_0_v_0 READ|2 1 ua_0_v_1 READ";
+	const char *initial_env_attr = "ea_0=ea_0_v_0\nea_1=ea_1_v_0";
+
+	abac_trees_user_attr_buf = kmalloc(strlen(initial_user_attr), GFP_KERNEL);
+	if (!abac_trees_user_attr_buf)
+		return -ENOMEM;
+
+	abac_trees_obj_attr_buf = kmalloc(strlen(initial_obj_attr), GFP_KERNEL);
+	if (!abac_trees_obj_attr_buf)
+		return -ENOMEM;
+
+	abac_trees_env_attr_buf = kmalloc(strlen(initial_env_attr), GFP_KERNEL);
+	if (!abac_trees_env_attr_buf)
+		return -ENOMEM;
+
+	strscpy(abac_trees_user_attr_buf, initial_user_attr, strlen(initial_user_attr));
+	abac_trees_parse_user_attr(abac_trees_user_attr_buf);
+	strscpy(abac_trees_obj_attr_buf, initial_obj_attr, strlen(initial_obj_attr));
+	abac_trees_parse_obj_attr(abac_trees_obj_attr_buf);
+	strscpy(abac_trees_env_attr_buf, initial_env_attr, strlen(initial_env_attr));
+	abac_trees_env_attr = abac_trees_parse_env_attr(abac_trees_env_attr_buf);
+
+	return 0;
+}
+
 // The hooks we wish to be installed.
 static struct security_hook_list abac_hooks[] __ro_after_init = {
 	LSM_HOOK_INIT(file_permission, abac_file_permission),
@@ -290,6 +321,11 @@ static const struct lsm_id abac_lsmid = {
 static int __init abac_init(void)
 {
 	security_add_hooks(abac_hooks, ARRAY_SIZE(abac_hooks), &abac_lsmid);
+	int err = load_initial_policy();
+
+	if (err)
+		return err;
+
 	printk(KERN_INFO "ABAC LSM (Trees): Initialized.\n Files in %s are protected by ABAC policy\n", secured_dir);
 	abac_trees_initialized = 1;
 	return 0;
