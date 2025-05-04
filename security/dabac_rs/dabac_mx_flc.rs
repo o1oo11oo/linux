@@ -14,7 +14,6 @@ mod bindings;
 #[path = "formula_level_caching/bindings_mx_flc.rs"]
 mod bindings_variants;
 mod epp;
-#[cfg(CONFIG_SECURITY_PERFORMANCE_KERNEL)]
 mod evaluation;
 mod expr;
 mod helpers;

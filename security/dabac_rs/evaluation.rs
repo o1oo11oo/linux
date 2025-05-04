@@ -4,7 +4,7 @@
 //!
 //! Contains the code for the in-kernel part of the performance measurement for the thesis.
 
-// Not all position identifiers are used in all variants
+// Not all position identifiers or functions are used in all variants
 #![allow(dead_code)]
 
 use core::arch::x86_64::{__rdtscp, _mm_lfence};

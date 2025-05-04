@@ -21,14 +21,12 @@ use kernel::{
 
 use crate::{
     epp,
+    evaluation::*,
     helpers::{self, global_lock},
     pip,
     policy::{self, Attributions, Policy},
     CACHE_SIZE, MAX_POST_CONDITIONS, PROTECTED_PATH,
 };
-
-#[cfg(CONFIG_SECURITY_PERFORMANCE_KERNEL)]
-use crate::evaluation::*;
 
 global_lock! {
     // SAFETY: Initialized in module initializer before first use.

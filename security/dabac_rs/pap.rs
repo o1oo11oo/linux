@@ -8,10 +8,7 @@ use core::str;
 
 use kernel::{prelude::*, str::CString};
 
-use crate::{helpers, pdp, pip, policy::Policy};
-
-#[cfg(CONFIG_SECURITY_PERFORMANCE_KERNEL)]
-use crate::evaluation::CYCLE_COUNTS_LEN;
+use crate::{evaluation::CYCLE_COUNTS_LEN, helpers, pdp, pip, policy::Policy};
 
 fn check_access(operation: usize) -> Result {
     // There is no file to access, but the current policy semantics cannot handle that
