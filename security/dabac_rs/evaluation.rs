@@ -16,7 +16,10 @@ use kernel::prelude::*;
 pub(crate) const CYCLE_COUNTS_LEN: usize = 15;
 
 /// Amount of cycle counts to store for start to end measurement
-#[cfg(all(CONFIG_SECURITY_PERFORMANCE_KERNEL,not(CONFIG_SECURITY_PERFORMANCE_KERNEL_PRECISE)))]
+#[cfg(all(
+    CONFIG_SECURITY_PERFORMANCE_KERNEL,
+    not(CONFIG_SECURITY_PERFORMANCE_KERNEL_PRECISE)
+))]
 pub(crate) const CYCLE_COUNTS_LEN: usize = 2;
 
 /// Force the cycle counts array to be zero sized when it is not needed
@@ -85,7 +88,10 @@ pub(crate) fn save_tsc_stop(cycle_counts: &mut [u64; CYCLE_COUNTS_LEN]) {
 /// No-op unless precise measurements are configured, use [`save_tsc_start`] and [`save_tsc_stop`]
 /// for the first and last measurement.
 #[inline]
-#[cfg_attr(not(CONFIG_SECURITY_PERFORMANCE_KERNEL_PRECISE), allow(unused_variables))]
+#[cfg_attr(
+    not(CONFIG_SECURITY_PERFORMANCE_KERNEL_PRECISE),
+    allow(unused_variables)
+)]
 pub(crate) fn save_tsc(cycle_counts: &mut [u64; CYCLE_COUNTS_LEN], index: usize) {
     #[cfg(CONFIG_SECURITY_PERFORMANCE_KERNEL_PRECISE)]
     {
