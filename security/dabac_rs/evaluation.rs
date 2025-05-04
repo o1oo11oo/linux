@@ -164,8 +164,15 @@ impl PerfResults {
 impl core::fmt::Display for PerfResults {
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
         write!(f, "[")?;
-        for (index, results) in self.list.iter().enumerate() {
-            write!(f, "{{{}: {:?}}},", index + 1000, results)?;
+        let Some(results) = self.list.first() else {
+            write!(f, "]")?;
+            return Ok(());
+        };
+
+        write!(f, "{{\"1000\": {:?}}}", results)?;
+
+        for (index, results) in self.list.iter().enumerate().skip(1) {
+            write!(f, ",{{\"{}\": {:?}}}", index + 1000, results)?;
         }
         write!(f, "]")?;
 
