@@ -101,3 +101,40 @@ pub(crate) fn update_policy(policy: &[u8]) -> Result {
     // Update attribution allocations just in case we have new maximum identifiers
     pip::ensure_attribution_length(max_id)
 }
+
+pub(crate) fn read_perf() -> Result<CString> {
+    // No need for AC decisions for eval
+    // Read the perf results from the PDP
+    pdp::get_perf_results()
+}
+
+pub(crate) fn register_or_start_perf(input: &[u8]) -> Result {
+    // No need for AC decisions for eval
+
+    // Trim the input to be able to more easily work with it (and parsing requires it)
+    let input = str::from_utf8(input)?.trim();
+
+    // Check which action this is
+    match input {
+        "start" => {
+            pr_info!("Starting perf run, storing results from now on");
+            pdp::start_perf_run();
+
+            Ok(())
+        }
+        "clear" | "reset" => {
+            pr_info!("Resetting all perf data");
+            pdp::clear_perf_data();
+
+            Ok(())
+        }
+        _ => {
+            // This is another runner registering itself
+            // Get the uid and read and parse the amount of requests and send them to the PDP
+            let uid = helpers::get_current_euid();
+            let amount: usize = input.parse()?;
+            pr_info!("Registering perf runner {uid} with {amount} requests");
+            pdp::register_perf(uid, amount)
+        }
+    }
+}

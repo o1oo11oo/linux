@@ -12,12 +12,14 @@ struct dentry *dabac_rs_mx_nc_user_attr_file;
 struct dentry *dabac_rs_mx_nc_obj_attr_file;
 struct dentry *dabac_rs_mx_nc_env_attr_file;
 struct dentry *dabac_rs_mx_nc_policy_file;
+struct dentry *dabac_rs_mx_nc_perf_file;
 
 struct dentry *dabac_rs_mx_nc_generic_fs;
 struct dentry *dabac_rs_mx_nc_generic_user_attr_file;
 struct dentry *dabac_rs_mx_nc_generic_obj_attr_file;
 struct dentry *dabac_rs_mx_nc_generic_env_attr_file;
 struct dentry *dabac_rs_mx_nc_generic_policy_file;
+struct dentry *dabac_rs_mx_nc_generic_perf_file;
 
 // The unsafety of these functions is somewhat hidden by the linker, in C the
 // function definitions contain a pointer argument, while the same argument is
@@ -32,6 +34,8 @@ extern ssize_t dabac_rs_mx_nc_read_env_attr(struct file *filp, char __user *buff
 extern ssize_t dabac_rs_mx_nc_update_env_attr(struct file *filp, const char __user *buffer, size_t len, loff_t *off);
 extern ssize_t dabac_rs_mx_nc_read_policy(struct file *filp, char __user *buffer, size_t count, loff_t *off);
 extern ssize_t dabac_rs_mx_nc_update_policy(struct file *filp, const char __user *buffer, size_t len, loff_t *off);
+extern ssize_t dabac_rs_mx_nc_read_perf(struct file *filp, char __user *buffer, size_t count, loff_t *off);
+extern ssize_t dabac_rs_mx_nc_register_perf(struct file *filp, const char __user *buffer, size_t len, loff_t *off);
 
 int dabac_rs_mx_nc_initialized;
 extern int dabac_rs_sl_nc_initialized;
@@ -80,6 +84,12 @@ static const struct file_operations policy_fops = {
 	.write = dabac_rs_mx_nc_update_policy,
 };
 
+static const struct file_operations perf_fops = {
+	.open = dabac_rs_mx_nc_open,
+	.read = dabac_rs_mx_nc_read_perf,
+	.write = dabac_rs_mx_nc_register_perf,
+};
+
 static void dabac_rs_mx_nc_destroy_fs(void)
 {
 	if (!IS_ERR_OR_NULL(dabac_rs_mx_nc_user_attr_file))
@@ -90,6 +100,8 @@ static void dabac_rs_mx_nc_destroy_fs(void)
 		securityfs_remove(dabac_rs_mx_nc_env_attr_file);
 	if (!IS_ERR_OR_NULL(dabac_rs_mx_nc_policy_file))
 		securityfs_remove(dabac_rs_mx_nc_policy_file);
+	if (!IS_ERR_OR_NULL(dabac_rs_mx_nc_perf_file))
+		securityfs_remove(dabac_rs_mx_nc_perf_file);
 	if (!IS_ERR_OR_NULL(dabac_rs_mx_nc_fs))
 		securityfs_remove(dabac_rs_mx_nc_fs);
 	if (!IS_ERR_OR_NULL(dabac_rs_mx_nc_generic_user_attr_file))
@@ -100,6 +112,8 @@ static void dabac_rs_mx_nc_destroy_fs(void)
 		securityfs_remove(dabac_rs_mx_nc_generic_env_attr_file);
 	if (!IS_ERR_OR_NULL(dabac_rs_mx_nc_generic_policy_file))
 		securityfs_remove(dabac_rs_mx_nc_generic_policy_file);
+	if (!IS_ERR_OR_NULL(dabac_rs_mx_nc_generic_perf_file))
+		securityfs_remove(dabac_rs_mx_nc_generic_perf_file);
 	if (!IS_ERR_OR_NULL(dabac_rs_mx_nc_generic_fs))
 		securityfs_remove(dabac_rs_mx_nc_generic_fs);
 }
@@ -155,6 +169,11 @@ static int dabac_rs_mx_nc_create_fs(void)
 	if (IS_ERR(dabac_rs_mx_nc_policy_file)) {
 		dabac_rs_mx_nc_destroy_fs();
 		return PTR_ERR(dabac_rs_mx_nc_policy_file);
+	}
+	dabac_rs_mx_nc_perf_file = dabac_rs_mx_nc_create_file(dabac_rs_mx_nc_fs, parentname, "perf", &perf_fops);
+	if (IS_ERR(dabac_rs_mx_nc_perf_file)) {
+		dabac_rs_mx_nc_destroy_fs();
+		return PTR_ERR(dabac_rs_mx_nc_perf_file);
 	}
 
 	pr_info("dabac_rs_mx_nc: securityfs initialized");
@@ -212,6 +231,11 @@ static int dabac_rs_mx_nc_create_generic_fs(void)
 	if (IS_ERR(dabac_rs_mx_nc_generic_policy_file)) {
 		dabac_rs_mx_nc_destroy_fs();
 		return PTR_ERR(dabac_rs_mx_nc_generic_policy_file);
+	}
+	dabac_rs_mx_nc_generic_perf_file = dabac_rs_mx_nc_create_file(dabac_rs_mx_nc_generic_fs, parentname, "perf", &perf_fops);
+	if (IS_ERR(dabac_rs_mx_nc_generic_perf_file)) {
+		dabac_rs_mx_nc_destroy_fs();
+		return PTR_ERR(dabac_rs_mx_nc_generic_perf_file);
 	}
 
 	pr_info("dabac_rs_mx_nc: generic securityfs initialized");

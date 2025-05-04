@@ -174,3 +174,42 @@ unsafe extern "C" fn dabac_rs_sl_flc_update_policy(
 ) -> c_int {
     update_policy_or_attrs(pap::update_policy, ptr, length)
 }
+
+/// Read the perf results
+///
+/// Called from the C implementation of the dabac_rs securityfs. Small glue
+/// function that gets the data from the PAP and then copies it to userspace.
+///
+/// # Safety
+///
+/// May only be used as `read` function pointer in `struct file_operations`
+#[no_mangle]
+unsafe extern "C" fn dabac_rs_sl_flc_read_perf(
+    _file: *mut bindings::file,
+    ptr: UserPtr,
+    count: c_ulong,
+    offset: *mut c_longlong,
+) -> c_int {
+    read_str(pap::read_perf, ptr, count, offset)
+}
+
+/// Register another process for perf eval
+///
+/// Called from the C implementation of the dabac_rs securityfs. Small glue
+/// function that copies the data from userspace before delegating to the actual
+/// function in the PAP.
+///
+/// # Safety
+///
+/// May only be used as `write` function pointer in `struct file_operations`
+#[no_mangle]
+unsafe extern "C" fn dabac_rs_sl_flc_register_perf(
+    _file: *mut bindings::file,
+    ptr: UserPtr,
+    length: c_ulong,
+    _offset: *mut c_longlong,
+) -> c_int {
+    // Technically not a policy or attr update, but this is kind of a generic "get this data and
+    // then call the provided function" function
+    update_policy_or_attrs(pap::register_or_start_perf, ptr, length)
+}

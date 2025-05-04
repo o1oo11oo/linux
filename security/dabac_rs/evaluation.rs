@@ -79,7 +79,6 @@ pub(crate) fn save_tsc_stop(cycle_counts: &mut [u64; CYCLE_COUNTS_LEN]) {
     #[cfg(CONFIG_SECURITY_PERFORMANCE_KERNEL)]
     {
         cycle_counts[STOP] = rdtscp();
-        pr_info!("cycle_counts: {cycle_counts:?}");
     }
 }
 
@@ -96,5 +95,80 @@ pub(crate) fn save_tsc(cycle_counts: &mut [u64; CYCLE_COUNTS_LEN], index: usize)
     #[cfg(CONFIG_SECURITY_PERFORMANCE_KERNEL_PRECISE)]
     {
         cycle_counts[index] = rdtscp();
+    }
+}
+
+#[derive(Debug)]
+pub(crate) struct PerfResults {
+    record: bool,
+    list: KVec<KVVec<[u64; CYCLE_COUNTS_LEN]>>,
+}
+
+impl PerfResults {
+    pub(crate) const fn new() -> Self {
+        Self {
+            record: false,
+            list: KVec::new(),
+        }
+    }
+
+    pub(crate) fn start_recording(&mut self) {
+        // Delete entries from previous runs in case they were not removed
+        self.clear_entries();
+        self.record = true;
+    }
+
+    pub(crate) fn stop_recording(&mut self) {
+        self.record = false;
+    }
+
+    pub(crate) fn clear_all(&mut self) {
+        self.list.clear();
+    }
+
+    pub(crate) fn clear_entries(&mut self) {
+        self.list.iter_mut().for_each(|v| v.clear());
+    }
+
+    pub(crate) fn register_runner(&mut self, uid: usize, amount: usize) -> Result {
+        // All processes run under uids starting from 1000
+        let index = uid.saturating_sub(1000);
+        // Add 10 requests for some slack to make sure we don't crash because of this
+        let amount = amount + 10;
+        for _ in self.list.len()..=index {
+            self.list
+                .push(KVVec::with_capacity(amount, GFP_KERNEL)?, GFP_KERNEL)?
+        }
+
+        Ok(())
+    }
+
+    pub(crate) fn push(&mut self, uid: usize, cycle_counts: [u64; CYCLE_COUNTS_LEN]) {
+        // Only store entries if we are recording
+        if !self.record {
+            return;
+        }
+
+        // All processes run under uids starting from 1000
+        let index = uid.saturating_sub(1000);
+
+        // SAFETY: according to the invariants the runner has registered itself beforehand and
+        // provided the maximum amount of requests it will make during evaluation
+        unsafe {
+            let runner_entry = self.list.get_unchecked_mut(index);
+            runner_entry.push_within_capacity_unchecked(cycle_counts);
+        };
+    }
+}
+
+impl core::fmt::Display for PerfResults {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        write!(f, "[")?;
+        for (index, results) in self.list.iter().enumerate() {
+            write!(f, "{{{}: {:?}}},", index + 1000, results)?;
+        }
+        write!(f, "]")?;
+
+        Ok(())
     }
 }
