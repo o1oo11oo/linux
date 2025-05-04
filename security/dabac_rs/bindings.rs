@@ -230,5 +230,5 @@ pub(crate) fn update_policy_or_attrs(
         return e.to_errno();
     }
 
-    length as _
+    buf.len() as _
 }
