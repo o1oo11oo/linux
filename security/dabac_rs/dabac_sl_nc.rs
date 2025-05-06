@@ -54,7 +54,7 @@ fn init() -> Result {
 ///
 /// [`global_lock_inner`]: kernel::sync::lock::global::global_lock_inner
 #[macro_export]
-macro_rules! global_lock_inner {
+macro_rules! vendored_global_lock_inner {
     () => {
         ::kernel::sync::lock::spinlock::SpinLockBackend
     };

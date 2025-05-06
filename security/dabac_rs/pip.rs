@@ -17,22 +17,22 @@ use kernel::{
 };
 
 use crate::{
-    helpers::global_lock,
+    helpers::vendored_global_lock,
     pdp,
     policy::{Attributions, ObjectAttributes, UserAttributes},
 };
 
-global_lock! {
+vendored_global_lock! {
     // SAFETY: Initialized in LSM initializer before first use.
     pub(crate) unsafe(uninit) static USER_ATTRIBUTES: Lock<UserAttributes> = UserAttributes::new();
 }
 
-global_lock! {
+vendored_global_lock! {
     // SAFETY: Initialized in LSM initializer before first use.
     pub(crate) unsafe(uninit) static OBJECT_ATTRIBUTES: Lock<ObjectAttributes> = unsafe { ObjectAttributes::new() };
 }
 
-global_lock! {
+vendored_global_lock! {
     // SAFETY: Initialized in LSM initializer before first use.
     pub(crate) unsafe(uninit) static ENV_ATTR_WRITE_GUARD: Lock<()> = ();
 }

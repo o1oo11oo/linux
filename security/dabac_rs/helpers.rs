@@ -62,7 +62,7 @@ pub(crate) fn vec_clone<T: Clone>(src: &[T], flags: Flags) -> Result<KVec<T>> {
 /// This allows selecting the backend flexibly for the variants without needing to duplicate even
 /// more code.
 #[macro_export]
-macro_rules! global_lock {
+macro_rules! vendored_global_lock {
     {
         $(#[$meta:meta])* $pub:vis
         unsafe(uninit) static $name:ident: Lock<$valuety:ty> = $value:expr;
@@ -80,7 +80,7 @@ macro_rules! global_lock {
         impl ::kernel::sync::lock::GlobalLockBackend for $name {
             const NAME: &'static ::kernel::str::CStr = ::kernel::c_str!(::core::stringify!($name));
             type Item = $valuety;
-            type Backend = $crate::global_lock_inner!();
+            type Backend = $crate::vendored_global_lock_inner!();
 
             fn get_lock_class() -> &'static ::kernel::sync::LockClassKey {
                 ::kernel::static_lock_class!()
@@ -99,4 +99,4 @@ macro_rules! global_lock {
         };
     };
 }
-pub(crate) use global_lock;
+pub(crate) use vendored_global_lock;

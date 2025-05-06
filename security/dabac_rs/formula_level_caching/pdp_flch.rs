@@ -23,13 +23,13 @@ use kernel::{
 use crate::{
     epp,
     evaluation::*,
-    helpers::{self, global_lock},
+    helpers::{self, vendored_global_lock},
     pip,
     policy::{self, Policy},
     CACHE_SIZE, MAX_POST_CONDITIONS, PROTECTED_PATH,
 };
 
-global_lock! {
+vendored_global_lock! {
     // SAFETY: Initialized in module initializer before first use.
     unsafe(uninit) static POLICY_WRITE_GUARD: Lock<()> = ();
 }
@@ -37,12 +37,12 @@ global_lock! {
 static POLICY: ProjectableGlobalLockedBy<Rcu<KBox<Policy>>, POLICY_WRITE_GUARD> =
     ProjectableGlobalLockedBy::new(Rcu::null());
 
-global_lock! {
+vendored_global_lock! {
     // SAFETY: Initialized in module initializer before first use.
     pub(crate) unsafe(uninit) static CACHE: Lock<LRUCache<CacheEntry, {CACHE_SIZE}>> = LRUCache::new();
 }
 
-global_lock! {
+vendored_global_lock! {
     // SAFETY: Initialized in module initializer before first use.
     unsafe(uninit) static PERF_RESULTS: Lock<PerfResults> = PerfResults::new();
 }
