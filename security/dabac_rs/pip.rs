@@ -161,9 +161,10 @@ pub(crate) fn get_serialized_env_attrs() -> Result<CString> {
 // In the no-caching variant the notify function returns (), which we pass to Some(...) directly.
 #[allow(clippy::unit_arg)]
 pub(crate) fn set_env_attributes(attrs: Attributions) -> Result {
-    let mut _cache_guard = None;
+    // Defined before `guard` to drop after releasing spinlock in spinlock variants.
+    let _old;
+    let _cache_guard;
     let attrs = KBox::new(attrs, GFP_KERNEL)?;
-    let mut guard = ENV_ATTR_WRITE_GUARD.lock();
 
     // Check if the attributions actually changed to see if the PDP needs to be notified. If they
     // did change or if they were not set before, notify it. Then also store the guard until the
@@ -179,8 +180,9 @@ pub(crate) fn set_env_attributes(attrs: Attributions) -> Result {
     }
     drop(rcu_guard);
 
+    let mut guard = ENV_ATTR_WRITE_GUARD.lock();
     let mut env_attr_writer = ENV_ATTRIBUTES.as_mut(&mut guard);
-    env_attr_writer.as_mut().replace(attrs);
+    _old = env_attr_writer.as_mut().replace(attrs);
 
     Ok(())
 }

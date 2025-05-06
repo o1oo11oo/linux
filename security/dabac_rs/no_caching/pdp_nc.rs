@@ -92,10 +92,12 @@ pub(crate) fn get_serialized_policy() -> Result<CString> {
 }
 
 pub(crate) fn set_policy(policy: Policy) -> Result {
+    // Defined before `guard` to drop after releasing spinlock in spinlock variants.
+    let _old;
     let policy = KBox::new(policy, GFP_KERNEL)?;
     let mut guard = POLICY_WRITE_GUARD.lock();
     let mut policy_writer = POLICY.as_mut(&mut guard);
-    policy_writer.as_mut().replace(policy);
+    _old = policy_writer.as_mut().replace(policy);
 
     Ok(())
 }
