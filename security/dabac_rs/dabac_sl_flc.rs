@@ -35,7 +35,7 @@ const LSM_ID: u64 = kernel::bindings::LSM_ID_DABAC_RS_SL_FLC as _;
 const __LOG_PREFIX: &[u8] = NAME.as_bytes_with_nul();
 
 /// The path under which the LSM provides access decisions for file reads/writes.
-const PROTECTED_PATH: &CStr = c_str!("/home/dabac_rs/");
+const PROTECTED_PATH: &CStr = c_str!("/home/secured/");
 
 /// The maximum amount of post-conditions that can be executed for one operation.
 const MAX_POST_CONDITIONS: usize = 32;

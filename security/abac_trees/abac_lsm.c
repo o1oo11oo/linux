@@ -9,8 +9,8 @@
 #include <linux/dcache.h>
 #include <linux/cred.h>
 
-static const char* secured_dir = "/home/abac_lsm/";
-static const int secured_dir_len = 15;
+static const char* secured_dir = "/home/secured/";
+static const int secured_dir_len = 14;
 
 // Track if the LSM was loaded and finished initializing
 int abac_trees_initialized;
@@ -282,7 +282,7 @@ extern char *abac_trees_env_attr_buf;
 static int load_initial_policy(void)
 {
 	const char *initial_user_attr = "1000:ua_0=ua_0_v_0\n1001:ua_0=ua_0_v_1";
-	const char *initial_obj_attr = "/home/abac_lsm/a:3|0 - - ea_0|1 0 ea_0_v_0 ua_0|2 1 ua_0_v_0 MODIFY\n/home/abac_lsm/b:4|0 - - ea_0|1 0 ea_0_v_0 ua_0|2 1 ua_0_v_0 READ|2 1 ua_0_v_1 READ";
+	const char *initial_obj_attr = "/home/secured/a:3|0 - - ea_0|1 0 ea_0_v_0 ua_0|2 1 ua_0_v_0 MODIFY\n/home/secured/b:4|0 - - ea_0|1 0 ea_0_v_0 ua_0|2 1 ua_0_v_0 READ|2 1 ua_0_v_1 READ";
 	const char *initial_env_attr = "ea_0=ea_0_v_0\nea_1=ea_1_v_0";
 
 	abac_trees_user_attr_buf = kmalloc(strlen(initial_user_attr), GFP_KERNEL);

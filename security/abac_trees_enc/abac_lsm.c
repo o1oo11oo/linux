@@ -8,8 +8,8 @@
 #include <linux/dcache.h>
 #include <linux/cred.h>
 
-static const char* secured_dir = "/home/abac_lsm/";
-static const int secured_dir_len = 15;
+static const char* secured_dir = "/home/secured/";
+static const int secured_dir_len = 14;
 
 // Track if the LSM was loaded and finished initializing
 int abac_trees_enc_initialized;
@@ -268,7 +268,7 @@ extern char *abac_trees_enc_env_attr_buf;
 static int load_initial_policy(void)
 {
 	const char *initial_user_attr = "1000:0=0\n1001:0=1";
-	const char *initial_obj_attr = "/home/abac_lsm/a:3|0 - - 0|1 0 0 0|2 1 0 MODIFY\n/home/abac_lsm/b:4|0 - - 0|1 0 0 0|2 1 0 READ|2 1 1 READ";
+	const char *initial_obj_attr = "/home/secured/a:3|0 - - 0|1 0 0 0|2 1 0 MODIFY\n/home/secured/b:4|0 - - 0|1 0 0 0|2 1 0 READ|2 1 1 READ";
 	const char *initial_env_attr = "0=0\n1=0";
 
 	abac_trees_enc_user_attr_buf = kmalloc(strlen(initial_user_attr), GFP_KERNEL);

@@ -8,8 +8,8 @@
 #include <linux/cred.h>
 #include "abacfs.h"
 
-static const char* secured_dir = "/home/abac_lsm/";
-static const int secured_dir_len = 15;
+static const char* secured_dir = "/home/secured/";
+static const int secured_dir_len = 14;
 
 // Track if the LSM was loaded and finished initializing
 int abac_rules_enc_initialized;
@@ -267,7 +267,7 @@ extern char *abac_rules_enc_policy_buf;
 static int load_initial_policy(void)
 {
 	const char *initial_user_attr = "1000:0=0\n1001:0=1";
-	const char *initial_obj_rules = "/home/abac_lsm/a:0,1\n/home/abac_lsm/b:0,1";
+	const char *initial_obj_rules = "/home/secured/a:0,1\n/home/secured/b:0,1";
 	const char *initial_env_attr = "0=0\n1=0";
 	const char *initial_policy = "2\n0:0=0|0=0|MODIFY\n1:0=1|0=0|READ";
 
