@@ -3,6 +3,7 @@
 #include <linux/types.h>
 #include <linux/fs.h>
 #include <linux/lsm_hooks.h>
+#include <linux/lsm_performance.h>
 #include <linux/timekeeping.h>
 #include <linux/dcache.h>
 #include <linux/cred.h>
@@ -15,8 +16,7 @@ static const int secured_dir_len = 14;
 int abac_rules_initialized;
 
 // Track cycle counts
-#define LSM_NAME "abac_rules"
-#include <linux/lsm_performance.h>
+struct perf_results abac_rules_perf_store;
 
 // Check if path is secured
 static int is_secured(char *accessed_path)
@@ -247,8 +247,8 @@ static int abac_file_permission(struct file *file, int mask)
 	decision = resolve(user_attr, r, op, cycle_counts);
 	//printk("decision: %s\n", decision == 1 ? "ALLOWED" : "DENIED");
 
-	// Stop the performance measurement and print results
-	save_tsc_stop(cycle_counts);
+	// Stop the performance measurement and store the results
+	save_tsc_stop(cycle_counts, uid, &abac_rules_perf_store);
 
 	/*if (abac_rules_recording) {
 		//end = ktime_get_real_ns();
@@ -319,6 +319,8 @@ static int __init abac_init(void)
 
 	if (err)
 		return err;
+
+	perf_results_init(&abac_rules_perf_store);
 
 	printk(KERN_INFO "ABAC LSM (Rules): Initialized.\n Files in %s are protected by ABAC policy\n", secured_dir);
 	abac_rules_initialized = 1;

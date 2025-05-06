@@ -8,16 +8,15 @@
  * variants, implemented in Rust, use their own Rust eval code.
  */
 
+#ifndef _LSM_PERFORMANCE_H
+#define _LSM_PERFORMANCE_H
+
 #include <linux/kernel.h>
 #include <linux/printk.h>
 #include <linux/slab.h>
+#include <linux/spinlock.h>
 #include <linux/string.h>
 #include <linux/types.h>
-
-// Define this here as fall back to silence IDE warnings
-#ifndef LSM_NAME
-#define LSM_NAME "unknown"
-#endif
 
 #if IS_ENABLED(CONFIG_SECURITY_PERFORMANCE_KERNEL_PRECISE)
 #define CYCLE_COUNTS_LEN 14
@@ -27,6 +26,8 @@
 // Cannot use globals because of parallelism
 #else CYCLE_COUNTS_LEN 1
 #endif
+
+#define UID_OFFSET 1000
 
 #define TSC_START 0
 #define AFTER_GET_OP 1
@@ -51,7 +52,27 @@
 
 #define TSC_STOP (CYCLE_COUNTS_LEN-1)
 
-static char *join_uint64_array(uint64_t *array, size_t length, const char *delimiter);
+struct perf_result_entry {
+	u64 *entries; // Flattened array: count * CYCLE_COUNTS_LEN
+	size_t count;
+	size_t capacity;
+};
+
+struct perf_results {
+	struct perf_result_entry *runners;
+	size_t num_runners;
+	spinlock_t lock;
+	bool record;
+};
+
+// API
+int perf_results_init(struct perf_results *store);
+void perf_results_start_recording(struct perf_results *store);
+void perf_results_stop_recording(struct perf_results *store);
+void perf_results_clear_entries(struct perf_results *store);
+int perf_results_register_runner(struct perf_results *store, uid_t uid, size_t amount);
+void perf_results_push(struct perf_results *store, uid_t uid, const u64 values[CYCLE_COUNTS_LEN]);
+void perf_results_free(struct perf_results *store);
 
 /**
  * Read the current cycle count
@@ -101,18 +122,12 @@ static __always_inline void save_tsc_start(uint64_t *cycle_counts)
  * Store the current cycle count in the last slot of the provided array and
  * print the results
  */
-static __always_inline int save_tsc_stop(uint64_t *cycle_counts)
+static __always_inline int save_tsc_stop(uint64_t *cycle_counts, uid_t uid, struct perf_results *store)
 {
 	#if IS_ENABLED(CONFIG_SECURITY_PERFORMANCE_KERNEL)
 	cycle_counts[TSC_STOP] = rdtscp();
 
-	char *joined_cycle_counts = join_uint64_array(cycle_counts, CYCLE_COUNTS_LEN, ", ");
-
-	if (IS_ERR(joined_cycle_counts))
-		return PTR_ERR(joined_cycle_counts);
-
-	pr_info("%s: cycle_counts: [%s]", LSM_NAME, joined_cycle_counts);
-	kfree(joined_cycle_counts);
+	perf_results_push(store, uid, cycle_counts);
 	#endif
 
 	return 0;
@@ -128,44 +143,120 @@ static __always_inline void save_tsc(uint64_t *cycle_counts, uint64_t index)
 	#endif
 }
 
-/*
- * Generate a string representation from a uint64_t array
- *
- * AI generated, with little touchups for checkpatch, can't be bothered to
- * implement something like this by hand just to communicate some values to user
- * space. The joy of C programming.
- */
-static char *join_uint64_array(uint64_t *array, size_t length, const char *delimiter)
+static inline size_t uid_index(uid_t uid)
 {
-	size_t delimiter_len = strlen(delimiter);
-	size_t total_length = 0;
-	size_t i;
-	char *result;
-	char *ptr;
+	return (uid >= UID_OFFSET) ? (uid - UID_OFFSET) : 0;
+}
 
-	// Calculate the total length needed for the result string
-	for (i = 0; i < length; i++) {
-		total_length += 20; // Max length for a uint64_t is 20 characters
-		if (i < length - 1)
-			total_length += delimiter_len;
+int perf_results_init(struct perf_results *store)
+{
+	spin_lock_init(&store->lock);
+	store->runners = NULL;
+	store->num_runners = 0;
+	store->record = false;
+	return 0;
+}
+
+void perf_results_start_recording(struct perf_results *store)
+{
+	spin_lock(&store->lock);
+	store->record = true;
+	for (size_t i = 0; i < store->num_runners; ++i)
+		store->runners[i].count = 0;
+	spin_unlock(&store->lock);
+}
+
+void perf_results_stop_recording(struct perf_results *store)
+{
+	spin_lock(&store->lock);
+	store->record = false;
+	spin_unlock(&store->lock);
+}
+
+void perf_results_clear_entries(struct perf_results *store)
+{
+	spin_lock(&store->lock);
+	for (size_t i = 0; i < store->num_runners; ++i)
+		store->runners[i].count = 0;
+	spin_unlock(&store->lock);
+}
+
+void perf_results_free(struct perf_results *store)
+{
+	spin_lock(&store->lock);
+	for (size_t i = 0; i < store->num_runners; ++i) {
+		kfree(store->runners[i].entries);
+		store->runners[i].entries = NULL;
+		store->runners[i].count = 0;
+		store->runners[i].capacity = 0;
 	}
-	total_length += 1; // For the null terminator
+	kfree(store->runners);
+	store->runners = NULL;
+	store->num_runners = 0;
+	spin_unlock(&store->lock);
+}
 
-	// Allocate memory for the result string
-	result = kmalloc(total_length, GFP_KERNEL);
-	if (!result)
-		return ERR_PTR(-ENOMEM);
+int perf_results_register_runner(struct perf_results *store, uid_t uid, size_t amount)
+{
+	size_t index = uid_index(uid);
+	size_t new_size = index + 1;
 
-	ptr = result;
+	spin_lock(&store->lock);
 
-	// Convert each uint64_t to a string and concatenate with the delimiter
-	for (i = 0; i < length; i++) {
-		ptr += sprintf(ptr, "%llu", (unsigned long long)array[i]);
-		if (i < length - 1) {
-			strcpy(ptr, delimiter);
-			ptr += delimiter_len;
+	if (new_size > store->num_runners) {
+		struct perf_result_entry *new_runners;
+
+		new_runners = krealloc(store->runners, new_size * sizeof(*store->runners), GFP_KERNEL);
+		if (!new_runners) {
+			spin_unlock(&store->lock);
+			return -ENOMEM;
+		}
+
+		// Zero newly added slots
+		for (size_t i = store->num_runners; i < new_size; ++i) {
+			new_runners[i].entries = NULL;
+			new_runners[i].count = 0;
+			new_runners[i].capacity = 0;
+		}
+
+		store->runners = new_runners;
+		store->num_runners = new_size;
+	}
+
+	struct perf_result_entry *runner = &store->runners[index];
+
+	if (!runner->entries) {
+		runner->capacity = amount + 10;
+		runner->entries = kmalloc_array(runner->capacity * CYCLE_COUNTS_LEN, sizeof(u64), GFP_KERNEL);
+		if (!runner->entries) {
+			spin_unlock(&store->lock);
+			return -ENOMEM;
 		}
 	}
 
-	return result;
+	spin_unlock(&store->lock);
+	return 0;
 }
+
+void perf_results_push(struct perf_results *store, uid_t uid, const u64 values[CYCLE_COUNTS_LEN])
+{
+	size_t index = uid_index(uid);
+
+	spin_lock(&store->lock);
+
+	// Only store entries if we are recording
+	if (!store->record) {
+		spin_unlock(&store->lock);
+		return;
+	}
+
+	struct perf_result_entry *runner = &store->runners[index];
+	u64 *dst = &runner->entries[runner->count * CYCLE_COUNTS_LEN];
+
+	memcpy(dst, values, sizeof(u64) * CYCLE_COUNTS_LEN);
+	runner->count++;
+
+	spin_unlock(&store->lock);
+}
+
+#endif
