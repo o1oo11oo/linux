@@ -6,6 +6,9 @@
 #include <linux/kernel.h>
 #include <linux/slab.h>
 #include <linux/uaccess.h>
+#include <linux/lsm_performance.h>
+
+extern struct perf_results abac_trees_perf_store;
 
 const size_t ABAC_TREES_MAX_FILE_SIZE = 8388608; // 8MB
 
@@ -13,14 +16,12 @@ struct dentry *abac_trees_abacfs;
 struct dentry *abac_trees_user_attr_file;
 struct dentry *abac_trees_obj_attr_file;
 struct dentry *abac_trees_env_attr_file;
-struct dentry *abac_trees_action_file;
 struct dentry *abac_trees_perf_file;
 
 struct dentry *abac_trees_generic_abacfs;
 struct dentry *abac_trees_generic_user_attr_file;
 struct dentry *abac_trees_generic_obj_attr_file;
 struct dentry *abac_trees_generic_env_attr_file;
-struct dentry *abac_trees_generic_action_file;
 struct dentry *abac_trees_generic_perf_file;
 
 char *abac_trees_user_attr_buf = NULL;
@@ -135,62 +136,56 @@ static ssize_t env_attr_write(struct file *filp, const char __user *buffer,
 	return len;
 }
 
-// method for writing to action file
-static ssize_t action_write(struct file *filp, const char __user *buffer,
-			      size_t len, loff_t *off)
+static ssize_t perf_read(struct file *file, char __user *buf, size_t count, loff_t *ppos)
 {
-	char *action_buf;
-	if (len >= ABAC_TREES_MAX_FILE_SIZE) {
-		printk(KERN_INFO
-		       "Write failed. Buffer too large %zu. Maximum file size is %zu\n",
-		       len, ABAC_TREES_MAX_FILE_SIZE);
-		return -EFAULT;
-	}
-	action_buf = kmalloc(len + 1, GFP_KERNEL);
-	if (!action_buf) {
-		printk(KERN_INFO
-		       "Write failed. Failed to allocate memory for action buffer\n");
-		return -EFAULT;
-	}
-	if (copy_from_user(action_buf, buffer, len + 1)) {
-		printk(KERN_INFO "Write to action failed\n");
-		return -EFAULT;
-	}
-	action_buf[len] = '\0';
-	if (strcmp(action_buf, "RECORD") == 0) {
-		printk("Recording started...");
-		abac_trees_prev_access_time = 0;
-		abac_trees_recording = 1;
-	} else if (strcmp(action_buf, "STOP") == 0) {
-		printk("Recording stopped...");
-		abac_trees_recording = 0;
-		//snprintf(abac_trees_perf_buf, 64, "%llu\n", abac_trees_prev_access_time);
-		//printk("Time taken written to /sys/kernel/security/abac/perf");
-		abac_trees_prev_access_time = 0;
-	} else {
-		printk("Invalid action...");
-	}
-	kfree(action_buf);
-	//clear_cache();
-	return len;
+	char *kbuf;
+	ssize_t ret;
+
+	// Stop recording when reading
+	perf_results_stop_recording(&abac_trees_perf_store);
+
+	// Allocate buffer
+	kbuf = kvmalloc(ABAC_TREES_MAX_FILE_SIZE, GFP_KERNEL);
+	if (!kbuf)
+		return -ENOMEM;
+
+	// Fill with JSON output
+	perf_results_serialize_to_json(&abac_trees_perf_store, kbuf, ABAC_TREES_MAX_FILE_SIZE);
+
+	// Use simple_read_from_buffer to handle ppos and copy to userspace
+	ret = simple_read_from_buffer(buf, count, ppos, kbuf, strlen(kbuf));
+	kvfree(kbuf);
+	return ret;
 }
 
-static ssize_t perf_read(struct file *file, char __user *buf, size_t count, loff_t *off)
+static ssize_t perf_write(struct file *file, const char __user *ubuf, size_t len, loff_t *ppos)
 {
-    loff_t pos = *off;
-    loff_t len = strlen(abac_trees_perf_buf);
+	char kbuf[32];
+	size_t to_copy = min(len, sizeof(kbuf) - 1);
+	uid_t uid = current_euid().val;
+	int ret, parsed;
 
-    if (pos >= len || !count)
-        return 0;
+	if (copy_from_user(kbuf, ubuf, to_copy))
+		return -EFAULT;
 
-    len -= pos;
-    if (count < len)
-        len = count;
+	kbuf[to_copy] = '\0';
+	strim(kbuf); // remove trailing whitespace
 
-    if (copy_to_user(buf, abac_trees_perf_buf, len))
-        return -EFAULT;
-    *off += len;
-    return len;
+	if (strcmp(kbuf, "start") == 0) {
+		pr_info("Starting perf run\n");
+		perf_results_start_recording(&abac_trees_perf_store);
+	} else if (strcmp(kbuf, "clear") == 0 || strcmp(kbuf, "reset") == 0) {
+		pr_info("Clearing perf results\n");
+		perf_results_clear_entries(&abac_trees_perf_store);
+	} else {
+		ret = kstrtoint(kbuf, 10, &parsed);
+		if (ret)
+			return ret;
+		pr_info("Registering perf runner %d with %d entries\n", uid, parsed);
+		perf_results_register_runner(&abac_trees_perf_store, uid, parsed);
+	}
+
+	return len;
 }
 
 static const struct file_operations user_attr_fops = {
@@ -208,14 +203,9 @@ static const struct file_operations env_attr_fops = {
 	.write = env_attr_write,
 };
 
-static const struct file_operations action_fops = {
-	.open = abac_open,
-	.write = action_write,
-};
-
 static const struct file_operations perf_fops = {
-	.open = abac_open,
 	.read = perf_read,
+	.write = perf_write,
 };
 
 static void destroy_abac_fs(void)
@@ -228,9 +218,6 @@ static void destroy_abac_fs(void)
 	}
 	if (!IS_ERR_OR_NULL(abac_trees_env_attr_file)) {
 		securityfs_remove(abac_trees_env_attr_file);
-	}
-	if (!IS_ERR_OR_NULL(abac_trees_action_file)) {
-		securityfs_remove(abac_trees_action_file);
 	}
 	if (!IS_ERR_OR_NULL(abac_trees_perf_file)) {
 		securityfs_remove(abac_trees_perf_file);
@@ -246,9 +233,6 @@ static void destroy_abac_fs(void)
 	}
 	if (!IS_ERR_OR_NULL(abac_trees_generic_env_attr_file)) {
 		securityfs_remove(abac_trees_generic_env_attr_file);
-	}
-	if (!IS_ERR_OR_NULL(abac_trees_generic_action_file)) {
-		securityfs_remove(abac_trees_generic_action_file);
 	}
 	if (!IS_ERR_OR_NULL(abac_trees_generic_perf_file)) {
 		securityfs_remove(abac_trees_generic_perf_file);
@@ -304,12 +288,7 @@ static int abac_create_fs(void)
 		return PTR_ERR(abac_trees_env_attr_file);
 	}
 
-	// Performance evaluation files
-	abac_trees_action_file = create_file(abac_trees_abacfs, parentname, "action", &action_fops);
-	if (IS_ERR(abac_trees_action_file)) {
-		destroy_abac_fs();
-		return PTR_ERR(abac_trees_action_file);
-	}
+	// Performance evaluation file
 	abac_trees_perf_file = create_file(abac_trees_abacfs, parentname, "perf", &perf_fops);
 	if (IS_ERR(abac_trees_perf_file)) {
 		destroy_abac_fs();
@@ -361,12 +340,7 @@ static int abac_create_generic_fs(void)
 		return PTR_ERR(abac_trees_generic_env_attr_file);
 	}
 
-	// Performance evaluation files
-	abac_trees_generic_action_file = create_file(abac_trees_generic_abacfs, parentname, "action", &action_fops);
-	if (IS_ERR(abac_trees_generic_action_file)) {
-		destroy_abac_fs();
-		return PTR_ERR(abac_trees_generic_action_file);
-	}
+	// Performance evaluation file
 	abac_trees_generic_perf_file = create_file(abac_trees_generic_abacfs, parentname, "perf", &perf_fops);
 	if (IS_ERR(abac_trees_generic_perf_file)) {
 		destroy_abac_fs();

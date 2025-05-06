@@ -73,6 +73,7 @@ void perf_results_clear_entries(struct perf_results *store);
 int perf_results_register_runner(struct perf_results *store, uid_t uid, size_t amount);
 void perf_results_push(struct perf_results *store, uid_t uid, const u64 values[CYCLE_COUNTS_LEN]);
 void perf_results_free(struct perf_results *store);
+void perf_results_serialize_to_json(struct perf_results *results, char *buf, size_t buf_size);
 
 /**
  * Read the current cycle count

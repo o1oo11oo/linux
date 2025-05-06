@@ -113,3 +113,45 @@ void perf_results_push(struct perf_results *store, uid_t uid, const u64 values[C
 
 	spin_unlock(&store->lock);
 }
+
+void perf_results_serialize_to_json(struct perf_results *results, char *buf, size_t buf_size)
+{
+	size_t offset = 0;
+	int i, j, k;
+
+	spin_lock(&results->lock);
+	offset += scnprintf(buf + offset, buf_size - offset, "[");
+
+	for (i = 0; i < results->num_runners; ++i) {
+		struct perf_result_entry *runner = &results->runners[i];
+		uid_t uid = i + 1000;
+
+		if (!runner || runner->count == 0)
+			continue;
+
+		if (offset > 1)
+			offset += scnprintf(buf + offset, buf_size - offset, ",");
+
+		offset += scnprintf(buf + offset, buf_size - offset, "{\"%d\":[", uid);
+
+		for (j = 0; j < runner->count; ++j) {
+			if (j > 0)
+				offset += scnprintf(buf + offset, buf_size - offset, ",");
+
+			offset += scnprintf(buf + offset, buf_size - offset, "[");
+			for (k = 0; k < CYCLE_COUNTS_LEN; ++k) {
+				offset += scnprintf(buf + offset,
+					buf_size - offset,
+					"%llu%s",
+					runner->entries[j * CYCLE_COUNTS_LEN + k],
+					(k == CYCLE_COUNTS_LEN - 1) ? "" : ",");
+			}
+			offset += scnprintf(buf + offset, buf_size - offset, "]");
+		}
+
+		offset += scnprintf(buf + offset, buf_size - offset, "]}");
+	}
+
+	offset += scnprintf(buf + offset, buf_size - offset, "]");
+	spin_unlock(&results->lock);
+}
