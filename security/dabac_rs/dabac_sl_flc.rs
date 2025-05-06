@@ -48,7 +48,8 @@ fn init() -> Result {
     // load its initial attributions and expand the allocation to limit allocations during policy
     // resolution. Otherwise uninitialized locks might get accessed.
     pdp::init()?;
-    pip::init()
+    pip::init()?;
+    evaluation::init()
 }
 
 /// Vendored and changed version of the [`global_lock_inner`] macro.

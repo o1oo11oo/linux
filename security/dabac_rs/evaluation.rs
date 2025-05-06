@@ -9,7 +9,9 @@
 
 use core::arch::x86_64::{__rdtscp, _mm_lfence};
 
-use kernel::prelude::*;
+use kernel::{prelude::*, str::CString};
+
+use crate::vendored_global_lock;
 
 /// Amount of cycle counts to store for intermediate measurements
 #[cfg(CONFIG_SECURITY_PERFORMANCE_KERNEL_PRECISE)]
@@ -41,6 +43,21 @@ pub(crate) const AFTER_UPDATE_CACHE: usize = 11;
 pub(crate) const AFTER_POST_CONDITIONS: usize = 12;
 pub(crate) const AFTER_CLEAR_CACHE: usize = 13;
 pub(crate) const STOP: usize = CYCLE_COUNTS_LEN.saturating_sub(1);
+
+vendored_global_lock! {
+    // SAFETY: Initialized in module initializer before first use.
+    unsafe(uninit) static PERF_RESULTS: Lock<PerfResults> = PerfResults::new();
+}
+
+/// Initialize the evaluation code during LSM initialization
+pub(crate) fn init() -> Result {
+    // SAFETY: All initializers are called exactly once.
+    unsafe {
+        PERF_RESULTS.init();
+    };
+
+    Ok(())
+}
 
 /// Read and return the current cycle count
 #[inline]
@@ -75,10 +92,13 @@ pub(crate) fn save_tsc_start(cycle_counts: &mut [u64; CYCLE_COUNTS_LEN]) {
 /// results to be collected from user space
 #[inline]
 #[cfg_attr(not(CONFIG_SECURITY_PERFORMANCE_KERNEL), allow(unused_variables))]
-pub(crate) fn save_tsc_stop(cycle_counts: &mut [u64; CYCLE_COUNTS_LEN]) {
+pub(crate) fn save_tsc_stop(mut cycle_counts: [u64; CYCLE_COUNTS_LEN], uid: usize) {
     #[cfg(CONFIG_SECURITY_PERFORMANCE_KERNEL)]
     {
         cycle_counts[STOP] = rdtscp();
+
+        // Lock the results store and add the current ones
+        PERF_RESULTS.lock().push(uid, cycle_counts);
     }
 }
 
@@ -96,6 +116,27 @@ pub(crate) fn save_tsc(cycle_counts: &mut [u64; CYCLE_COUNTS_LEN], index: usize)
     {
         cycle_counts[index] = rdtscp();
     }
+}
+
+pub(crate) fn register_perf(uid: usize, amount: usize) -> Result {
+    let mut guard = PERF_RESULTS.lock();
+    guard.register_runner(uid, amount)
+}
+
+pub(crate) fn start_perf_run() {
+    let mut guard = PERF_RESULTS.lock();
+    guard.start_recording();
+}
+
+pub(crate) fn get_perf_results() -> Result<CString> {
+    let mut guard = PERF_RESULTS.lock();
+    guard.stop_recording();
+    CString::try_from_fmt(fmt!("{}", &*guard))
+}
+
+pub(crate) fn clear_perf_data() {
+    let mut guard = PERF_RESULTS.lock();
+    guard.clear_all();
 }
 
 #[derive(Debug)]

@@ -41,11 +41,6 @@ vendored_global_lock! {
     pub(crate) unsafe(uninit) static CACHE: Lock<LRUCache<CacheEntry, {CACHE_SIZE}>> = LRUCache::new();
 }
 
-vendored_global_lock! {
-    // SAFETY: Initialized in module initializer before first use.
-    unsafe(uninit) static PERF_RESULTS: Lock<PerfResults> = PerfResults::new();
-}
-
 pub(crate) struct CacheEntry {
     key: CacheKey,
     value: CacheValue,
@@ -69,7 +64,6 @@ pub(crate) fn init() -> Result {
     unsafe {
         POLICY_WRITE_GUARD.init();
         CACHE.init();
-        PERF_RESULTS.init();
     };
 
     // The attributes are encoded because it is simpler to work with
@@ -178,10 +172,7 @@ pub(crate) fn file_permission(file: &LocalFile, mask: i32) -> Result<bool> {
     let resolution = resolve(operation, uid, inode, &mut cycle_counts)?;
 
     // Stop the performance measurement
-    save_tsc_stop(&mut cycle_counts);
-
-    // Lock the results store and add the current ones
-    PERF_RESULTS.lock().push(uid, cycle_counts);
+    save_tsc_stop(cycle_counts, uid);
 
     if resolution {
         #[cfg(not(CONFIG_SECURITY_PERFORMANCE))]
@@ -349,25 +340,4 @@ fn get_op_from_mask(mask: i32) -> Result<usize> {
         bindings::MAY_READ => Ok(2),
         _ => Err(EINVAL),
     }
-}
-
-pub(crate) fn register_perf(uid: usize, amount: usize) -> Result {
-    let mut guard = PERF_RESULTS.lock();
-    guard.register_runner(uid, amount)
-}
-
-pub(crate) fn start_perf_run() {
-    let mut guard = PERF_RESULTS.lock();
-    guard.start_recording();
-}
-
-pub(crate) fn get_perf_results() -> Result<CString> {
-    let mut guard = PERF_RESULTS.lock();
-    guard.stop_recording();
-    CString::try_from_fmt(fmt!("{}", &*guard))
-}
-
-pub(crate) fn clear_perf_data() {
-    let mut guard = PERF_RESULTS.lock();
-    guard.clear_all();
 }

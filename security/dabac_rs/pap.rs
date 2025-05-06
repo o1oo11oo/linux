@@ -8,7 +8,11 @@ use core::str;
 
 use kernel::{prelude::*, str::CString};
 
-use crate::{evaluation::CYCLE_COUNTS_LEN, helpers, pdp, pip, policy::Policy};
+use crate::{
+    evaluation::{self, CYCLE_COUNTS_LEN},
+    helpers, pdp, pip,
+    policy::Policy,
+};
 
 fn check_access(operation: usize) -> Result {
     // There is no file to access, but the current policy semantics cannot handle that
@@ -104,8 +108,8 @@ pub(crate) fn update_policy(policy: &[u8]) -> Result {
 
 pub(crate) fn read_perf() -> Result<CString> {
     // No need for AC decisions for eval
-    // Read the perf results from the PDP
-    pdp::get_perf_results()
+    // Read the perf results from the Evaluation
+    evaluation::get_perf_results()
 }
 
 pub(crate) fn register_or_start_perf(input: &[u8]) -> Result {
@@ -118,23 +122,23 @@ pub(crate) fn register_or_start_perf(input: &[u8]) -> Result {
     match input {
         "start" => {
             pr_info!("Starting perf run, storing results from now on");
-            pdp::start_perf_run();
+            evaluation::start_perf_run();
 
             Ok(())
         }
         "clear" | "reset" => {
             pr_info!("Resetting all perf data");
-            pdp::clear_perf_data();
+            evaluation::clear_perf_data();
 
             Ok(())
         }
         _ => {
             // This is another runner registering itself
-            // Get the uid and read and parse the amount of requests and send them to the PDP
+            // Get the uid and read and parse the amount of requests and send them to the eval
             let uid = helpers::get_current_euid();
             let amount: usize = input.parse()?;
             pr_info!("Registering perf runner {uid} with {amount} requests");
-            pdp::register_perf(uid, amount)
+            evaluation::register_perf(uid, amount)
         }
     }
 }
