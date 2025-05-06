@@ -9,9 +9,7 @@
 
 use core::arch::x86_64::{__rdtscp, _mm_lfence};
 
-use kernel::{prelude::*, str::CString};
-
-use crate::vendored_global_lock;
+use kernel::{global_lock, prelude::*, str::CString};
 
 /// Amount of cycle counts to store for intermediate measurements
 #[cfg(CONFIG_SECURITY_PERFORMANCE_KERNEL_PRECISE)]
@@ -44,9 +42,9 @@ pub(crate) const AFTER_POST_CONDITIONS: usize = 12;
 pub(crate) const AFTER_CLEAR_CACHE: usize = 13;
 pub(crate) const STOP: usize = CYCLE_COUNTS_LEN.saturating_sub(1);
 
-vendored_global_lock! {
+global_lock! {
     // SAFETY: Initialized in module initializer before first use.
-    unsafe(uninit) static PERF_RESULTS: Lock<PerfResults> = PerfResults::new();
+    unsafe(uninit) static PERF_RESULTS: SpinLock<PerfResults> = PerfResults::new();
 }
 
 /// Initialize the evaluation code during LSM initialization
