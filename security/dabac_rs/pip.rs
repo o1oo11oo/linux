@@ -161,6 +161,40 @@ pub(crate) fn get_serialized_env_attrs() -> Result<CString> {
 // In the no-caching variant the notify function returns (), which we pass to Some(...) directly.
 #[allow(clippy::unit_arg)]
 pub(crate) fn set_env_attributes(attrs: Attributions) -> Result {
+    // This function has somewhat intricate locking/synchronization semantics, which is why the
+    // `old` and `_cache_guard` variables are defined first in this order, to get the correct drop
+    // order, resulting in the required unlock order.
+    //
+    // Before the attributes stored in RCU are changed, the PDP needs to be notified that they do
+    // change, because that might reset a cache in one of the variants. Because environmental
+    // attributes are updated regularly, this should only happen if there is an actual change,
+    // otherwise cache efficiency decreases. To compare to the current state, an RCU read-side
+    // critical section is needed.
+    //
+    // As soon as the PDP clears the cache, new cache entries or policy resolutions using the still
+    // unchanged environmental attributes must not be created, as they would remain in the cache.
+    // Resetting the cache also cannot wait till after the attributes are updated, as otherwise
+    // requests could be resolved with a now wrong resolution.
+    //
+    // Because of this, the cache needs to stay locked until the RCU protected data is updated when
+    // `replace` is called at the end of this function. To ensure this, the notify function in
+    // caching variants returns the lock guard for their cache, which is stored as `_cache_guard`.
+    //
+    // To actually update the value stored in RCU, the `ENV_ATTR_WRITE_GUARD` global lock needs to
+    // be held, to ensure only one thread can update the data stored in the static variable. This is
+    // also dropped at the end of the function, which unlocks it.
+    //
+    // In variants using spinlocks instead of mutexes as backends of the global lock providing the
+    // `ENV_ATTR_WRITE_GUARD`, the spinlock is also held till the end of the function. Changing a
+    // value in RCU and dropping the old value requires waiting for other threads until they leave
+    // their read-side critical sections. The `synchronize_rcu()` call responsible for that involves
+    // sleeping though, which is not permitted while holding a spinlock.
+    //
+    // To ensure both locks (the one for the cache and the RCU write guard) are unlocked before
+    // `synchronize_rcu()` is called, we define the variable for the old RCU data up here, so that
+    // it gets dropped last, after the locks have already been unlocked in their earlier
+    // destructors, when its drop impl can safely call `synchronize_rcu()`.
+
     // Defined before `guard` to drop after releasing spinlock in spinlock variants.
     let _old;
     let _cache_guard;
