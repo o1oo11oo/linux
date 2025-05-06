@@ -113,6 +113,9 @@ pub(crate) fn get_serialized_policy() -> Result<CString> {
 }
 
 pub(crate) fn set_policy(policy: Policy) -> Result {
+    // This function has the same semantic requirements as `pip::set_env_attributes`, see its
+    // lengthy explanation, but a bit simpler because we can directly access the cache.
+
     // Defined before `guard` to drop after releasing spinlock in spinlock variants.
     let _old;
     let policy = KBox::new(policy, GFP_KERNEL)?;

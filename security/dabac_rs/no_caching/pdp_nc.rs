@@ -92,6 +92,16 @@ pub(crate) fn get_serialized_policy() -> Result<CString> {
 }
 
 pub(crate) fn set_policy(policy: Policy) -> Result {
+    // Technically this function has the same semantic requirements as `pip::set_env_attributes`,
+    // but a bit simpler because this variant has no cache. Technically policy resolution should
+    // stop when the policy is updated and only start again after, but since this only switches it
+    // in RCU, there is no way to get inconsistent policy results unlike the caching variants which
+    // need to reset their cache. It can be argued that replacing the policy while blocking
+    // concurrent policy resolutions is as fast as just going ahead and replacing it, there will
+    // always be some micro- or nanoseconds where the kernel has not processed the policy cange
+    // request yet. For this MVP the policy only gets changed when another test case is loaded
+    // during evaluation, so we leave it as it is.
+
     // Defined before `guard` to drop after releasing spinlock in spinlock variants.
     let _old;
     let policy = KBox::new(policy, GFP_KERNEL)?;
