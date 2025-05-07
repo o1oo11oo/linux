@@ -2,7 +2,7 @@
 
 //! String representations.
 
-use crate::alloc::{flags::*, AllocError, KVec};
+use crate::alloc::{allocator::Kmalloc, flags::*, AllocError, Allocator, Vec};
 use core::fmt::{self, Write};
 use core::ops::{self, Deref, DerefMut, Index};
 
@@ -820,14 +820,17 @@ impl fmt::Write for Formatter {
 /// # Ok::<(), kernel::error::Error>(())
 /// ```
 #[derive(PartialEq, Eq)]
-pub struct CString {
-    buf: KVec<u8>,
+pub struct CString<A: Allocator = Kmalloc> {
+    buf: Vec<u8, A>,
 }
 
-impl CString {
+impl<A> CString<A>
+where
+    A: Allocator,
+{
     /// Creates an empty [`CString`]
     pub fn new() -> Result<Self, Error> {
-        let mut buf = KVec::new();
+        let mut buf = Vec::new();
         buf.push(b'\0', GFP_KERNEL)?;
 
         // INVARIANT: We wrote exactly the one required `NUL` terminator.
@@ -843,7 +846,7 @@ impl CString {
         let size = f.bytes_written();
 
         // Allocate a vector with the required number of bytes, and write to it.
-        let mut buf = KVec::with_capacity(size, GFP_KERNEL)?;
+        let mut buf = Vec::with_capacity(size, GFP_KERNEL)?;
         // SAFETY: The buffer stored in `buf` is at least of size `size` and is valid for writes.
         let mut f = unsafe { Formatter::from_buffer(buf.as_mut_ptr(), size) };
         f.write_fmt(args)?;
@@ -868,7 +871,10 @@ impl CString {
     }
 }
 
-impl Deref for CString {
+impl<A> Deref for CString<A>
+where
+    A: Allocator,
+{
     type Target = CStr;
 
     fn deref(&self) -> &Self::Target {
@@ -878,7 +884,10 @@ impl Deref for CString {
     }
 }
 
-impl DerefMut for CString {
+impl<A> DerefMut for CString<A>
+where
+    A: Allocator,
+{
     fn deref_mut(&mut self) -> &mut Self::Target {
         // SAFETY: A `CString` is always NUL-terminated and contains no other
         // NUL bytes.
@@ -886,11 +895,14 @@ impl DerefMut for CString {
     }
 }
 
-impl<'a> TryFrom<&'a CStr> for CString {
+impl<'a, A> TryFrom<&'a CStr> for CString<A>
+where
+    A: Allocator,
+{
     type Error = AllocError;
 
-    fn try_from(cstr: &'a CStr) -> Result<CString, AllocError> {
-        let mut buf = KVec::new();
+    fn try_from(cstr: &'a CStr) -> Result<CString<A>, AllocError> {
+        let mut buf = Vec::new();
 
         buf.extend_from_slice(cstr.as_bytes_with_nul(), GFP_KERNEL)?;
 
@@ -900,10 +912,13 @@ impl<'a> TryFrom<&'a CStr> for CString {
     }
 }
 
-impl<'a> TryFrom<&'a str> for CString {
+impl<'a, A> TryFrom<&'a str> for CString<A>
+where
+    A: Allocator,
+{
     type Error = Error;
 
-    fn try_from(src: &'a str) -> Result<CString, Self::Error> {
+    fn try_from(src: &'a str) -> Result<CString<A>, Self::Error> {
         let src = src.as_bytes();
 
         // Check for other NUL bytes, CString must contain exactly one at the end
@@ -912,7 +927,7 @@ impl<'a> TryFrom<&'a str> for CString {
         }
 
         // Allocate space for the str and the additional NUL byte
-        let mut buf = KVec::with_capacity(src.len() + 1, GFP_KERNEL)?;
+        let mut buf = Vec::with_capacity(src.len() + 1, GFP_KERNEL)?;
 
         buf.extend_from_slice(src, GFP_KERNEL)?;
         buf.push(b'\0', GFP_KERNEL)?;
@@ -923,7 +938,10 @@ impl<'a> TryFrom<&'a str> for CString {
     }
 }
 
-impl fmt::Debug for CString {
+impl<A> fmt::Debug for CString<A>
+where
+    A: Allocator,
+{
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         fmt::Debug::fmt(&**self, f)
     }
