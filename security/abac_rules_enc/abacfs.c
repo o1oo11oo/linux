@@ -201,9 +201,12 @@ static ssize_t perf_write(struct file *file, const char __user *ubuf, size_t len
 	if (strcmp(kbuf, "start") == 0) {
 		pr_info("Starting perf run\n");
 		perf_results_start_recording(&abac_rules_enc_perf_store);
-	} else if (strcmp(kbuf, "clear") == 0 || strcmp(kbuf, "reset") == 0) {
-		pr_info("Clearing perf results\n");
+	} else if (strcmp(kbuf, "clear") == 0) {
+		pr_info("Clearing perf data\n");
 		perf_results_clear_entries(&abac_rules_enc_perf_store);
+	} else if (strcmp(kbuf, "reset") == 0) {
+		pr_info("Resetting perf data storage\n");
+		perf_results_free(&abac_rules_enc_perf_store);
 	} else {
 		ret = kstrtoint(kbuf, 10, &parsed);
 		if (ret)
