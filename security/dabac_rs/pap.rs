@@ -8,25 +8,34 @@ use core::str;
 
 use kernel::{prelude::*, str::CString};
 
-use crate::{
-    evaluation::{self, CYCLE_COUNTS_LEN},
-    helpers, pdp, pip,
-    policy::Policy,
-};
+use crate::{evaluation, helpers, pdp, pip, policy::Policy};
 
+#[cfg(not(CONFIG_SECURITY_PERFORMANCE))]
+use crate::evaluation::CYCLE_COUNTS_LEN;
+
+#[cfg_attr(CONFIG_SECURITY_PERFORMANCE, allow(unused_variables))]
 fn check_access(operation: usize) -> Result {
-    // There is no file to access, but the current policy semantics cannot handle that
-    let uid = helpers::get_current_euid();
-    let inode = 0;
+    // Only check access when we are not benchmarking
+    // This is to make sure we cannot load a policy that would prevent us from changing it later
+    #[cfg(CONFIG_SECURITY_PERFORMANCE)]
+    {
+        Ok(())
+    }
+    #[cfg(not(CONFIG_SECURITY_PERFORMANCE))]
+    {
+        // There is no file to access, but the current policy semantics cannot handle that
+        let uid = helpers::get_current_euid();
+        let inode = 0;
 
-    // Not relevant for the evaluation, but the function expects the parameter, so we need to
-    // provide it with correct length
-    let mut cycle_counts = [0; CYCLE_COUNTS_LEN];
+        // Not relevant for the evaluation, but the function expects the parameter, so we need to
+        // provide it with correct length
+        let mut cycle_counts = [0; CYCLE_COUNTS_LEN];
 
-    match pdp::resolve(operation, uid, inode, &mut cycle_counts) {
-        Ok(true) => Ok(()),
-        Ok(false) => Err(EPERM),
-        Err(e) => Err(e),
+        match pdp::resolve(operation, uid, inode, &mut cycle_counts) {
+            Ok(true) => Ok(()),
+            Ok(false) => Err(EPERM),
+            Err(e) => Err(e),
+        }
     }
 }
 
