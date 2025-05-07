@@ -134,7 +134,12 @@ pub(crate) fn get_perf_results() -> Result<CString> {
 
 pub(crate) fn clear_perf_data() {
     let mut guard = PERF_RESULTS.lock();
-    guard.clear_all();
+    guard.clear();
+}
+
+pub(crate) fn reset_perf_data() {
+    let mut guard = PERF_RESULTS.lock();
+    guard.reset();
 }
 
 #[derive(Debug)]
@@ -153,7 +158,7 @@ impl PerfResults {
 
     pub(crate) fn start_recording(&mut self) {
         // Delete entries from previous runs in case they were not removed
-        self.clear_entries();
+        self.clear();
         self.record = true;
     }
 
@@ -161,11 +166,11 @@ impl PerfResults {
         self.record = false;
     }
 
-    pub(crate) fn clear_all(&mut self) {
+    pub(crate) fn reset(&mut self) {
         self.list.clear();
     }
 
-    pub(crate) fn clear_entries(&mut self) {
+    pub(crate) fn clear(&mut self) {
         self.list.iter_mut().for_each(|v| v.clear());
     }
 

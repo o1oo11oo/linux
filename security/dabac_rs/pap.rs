@@ -135,9 +135,15 @@ pub(crate) fn register_or_start_perf(input: &[u8]) -> Result {
 
             Ok(())
         }
-        "clear" | "reset" => {
-            pr_info!("Resetting all perf data");
+        "clear" => {
+            pr_info!("Clearing perf data");
             evaluation::clear_perf_data();
+
+            Ok(())
+        }
+        "reset" => {
+            pr_info!("Resetting perf data storage");
+            evaluation::reset_perf_data();
 
             Ok(())
         }
