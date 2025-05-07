@@ -174,9 +174,15 @@ impl PerfResults {
         let index = uid.saturating_sub(1000);
         // Add 10 requests for some slack to make sure we don't crash because of this
         let amount = amount + 10;
+
+        // Make sure the Vec contains the required entry
         for _ in self.list.len()..=index {
-            self.list
-                .push(KVVec::with_capacity(amount, GFP_KERNEL)?, GFP_KERNEL)?
+            self.list.push(KVVec::new(), GFP_KERNEL)?
+        }
+
+        // Update the required entry to its correct amount
+        if let Some(entry) = self.list.get_mut(index) {
+            *entry = KVVec::with_capacity(amount, GFP_KERNEL)?
         }
 
         Ok(())
