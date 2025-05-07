@@ -9,7 +9,7 @@
 
 use core::arch::x86_64::{__rdtscp, _mm_lfence};
 
-use kernel::{global_lock, prelude::*, str::CString};
+use kernel::{alloc::allocator::KVmalloc, global_lock, prelude::*, str::CString};
 
 /// Amount of cycle counts to store for intermediate measurements
 #[cfg(CONFIG_SECURITY_PERFORMANCE_KERNEL_PRECISE)]
@@ -126,7 +126,7 @@ pub(crate) fn start_perf_run() {
     guard.start_recording();
 }
 
-pub(crate) fn get_perf_results() -> Result<CString> {
+pub(crate) fn get_perf_results() -> Result<CString<KVmalloc>> {
     let mut guard = PERF_RESULTS.lock();
     guard.stop_recording();
     CString::try_from_fmt(fmt!("{}", &*guard))

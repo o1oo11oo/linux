@@ -6,7 +6,7 @@
 
 use core::str;
 
-use kernel::{prelude::*, str::CString};
+use kernel::{alloc::allocator::KVmalloc, prelude::*, str::CString};
 
 use crate::{evaluation, helpers, pdp, pip, policy::Policy};
 
@@ -39,7 +39,7 @@ fn check_access(operation: usize) -> Result {
     }
 }
 
-pub(crate) fn read_user_attr() -> Result<CString> {
+pub(crate) fn read_user_attr() -> Result<CString<KVmalloc>> {
     // Get an AC decision before reading the attributes
     check_access(0)?;
 
@@ -57,7 +57,7 @@ pub(crate) fn update_user_attr(attrs: &[u8]) -> Result {
     pip::set_user_attributes(attrs)
 }
 
-pub(crate) fn read_object_attr() -> Result<CString> {
+pub(crate) fn read_object_attr() -> Result<CString<KVmalloc>> {
     // Get an AC decision before reading the attributes
     check_access(0)?;
 
@@ -75,7 +75,7 @@ pub(crate) fn update_object_attr(attrs: &[u8]) -> Result {
     pip::set_object_attributes(attrs)
 }
 
-pub(crate) fn read_env_attr() -> Result<CString> {
+pub(crate) fn read_env_attr() -> Result<CString<KVmalloc>> {
     // Get an AC decision before reading the attributes
     check_access(0)?;
 
@@ -93,7 +93,7 @@ pub(crate) fn update_env_attr(attrs: &[u8]) -> Result {
     pip::set_env_attributes(attrs)
 }
 
-pub(crate) fn read_policy() -> Result<CString> {
+pub(crate) fn read_policy() -> Result<CString<KVmalloc>> {
     // Get an AC decision before reading the policy
     check_access(0)?;
 
@@ -115,7 +115,7 @@ pub(crate) fn update_policy(policy: &[u8]) -> Result {
     pip::ensure_attribution_length(max_id)
 }
 
-pub(crate) fn read_perf() -> Result<CString> {
+pub(crate) fn read_perf() -> Result<CString<KVmalloc>> {
     // No need for AC decisions for eval
     // Read the perf results from the Evaluation
     evaluation::get_perf_results()

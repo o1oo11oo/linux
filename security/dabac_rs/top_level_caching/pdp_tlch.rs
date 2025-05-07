@@ -7,7 +7,7 @@
 //! Variant: top level caching with hashing (TLCH)
 
 use kernel::{
-    alloc::arrayvec::ArrayVec,
+    alloc::{allocator::KVmalloc, arrayvec::ArrayVec},
     bindings, c_str,
     crypto::hash::{Shash, ShashDesc},
     fs::LocalFile,
@@ -97,7 +97,7 @@ pub(crate) fn get_max_attribute_id() -> usize {
     }
 }
 
-pub(crate) fn get_serialized_policy() -> Result<CString> {
+pub(crate) fn get_serialized_policy() -> Result<CString<KVmalloc>> {
     let rcu_guard = rcu::read_lock();
     if let Some(policy) = POLICY.dereference(&rcu_guard) {
         CString::try_from_fmt(fmt!("{}", policy))

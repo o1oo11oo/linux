@@ -12,6 +12,7 @@
 //! replaced with a pure Rust implementation.
 
 use kernel::{
+    alloc::allocator::KVmalloc,
     bindings,
     ffi::*,
     fs::LocalFile,
@@ -162,7 +163,7 @@ unsafe extern "C" fn file_permission(file: *mut bindings::file, mask: c_int) -> 
 ///
 /// Implemented as helper function because they all do the same.
 pub(crate) fn read_str(
-    target: fn() -> Result<CString>,
+    target: fn() -> Result<CString<KVmalloc>>,
     ptr: UserPtr,
     count: c_ulong,
     offset: *mut c_longlong,

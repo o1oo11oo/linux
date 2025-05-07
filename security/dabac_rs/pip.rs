@@ -7,7 +7,7 @@
 use core::num::NonZeroU32;
 
 use kernel::{
-    alloc::Flags,
+    alloc::{allocator::KVmalloc, Flags},
     prelude::*,
     str::CString,
     sync::{
@@ -107,7 +107,7 @@ pub(crate) fn init() -> Result {
     Ok(())
 }
 
-pub(crate) fn get_serialized_user_attrs() -> Result<CString> {
+pub(crate) fn get_serialized_user_attrs() -> Result<CString<KVmalloc>> {
     let guard = USER_ATTRIBUTES.lock();
     CString::try_from_fmt(fmt!("{}", &*guard))
 }
@@ -128,7 +128,7 @@ pub(crate) fn set_user_attributes(mut attrs: UserAttributes) -> Result {
     Ok(())
 }
 
-pub(crate) fn get_serialized_object_attrs() -> Result<CString> {
+pub(crate) fn get_serialized_object_attrs() -> Result<CString<KVmalloc>> {
     let guard = OBJECT_ATTRIBUTES.lock();
     CString::try_from_fmt(fmt!("{}", &*guard))
 }
@@ -149,7 +149,7 @@ pub(crate) fn set_object_attributes(mut attrs: ObjectAttributes) -> Result {
     Ok(())
 }
 
-pub(crate) fn get_serialized_env_attrs() -> Result<CString> {
+pub(crate) fn get_serialized_env_attrs() -> Result<CString<KVmalloc>> {
     let rcu_guard = rcu::read_lock();
     if let Some(attrs) = ENV_ATTRIBUTES.dereference(&rcu_guard) {
         CString::try_from_fmt(fmt!("{}", attrs))
