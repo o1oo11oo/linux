@@ -316,6 +316,7 @@ pub(crate) fn resolve(
         )?;
     }
 
+    save_post_condition_count(cycle_counts, post_conditions.len());
     save_tsc(cycle_counts, AFTER_POST_CONDITIONS);
 
     // If we executed any post-conditions we need to reset the cache

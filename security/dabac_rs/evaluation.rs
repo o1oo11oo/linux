@@ -13,14 +13,14 @@ use kernel::{alloc::allocator::KVmalloc, global_lock, prelude::*, str::CString};
 
 /// Amount of cycle counts to store for intermediate measurements
 #[cfg(CONFIG_SECURITY_PERFORMANCE_KERNEL_PRECISE)]
-pub(crate) const CYCLE_COUNTS_LEN: usize = 15;
+pub(crate) const CYCLE_COUNTS_LEN: usize = 16;
 
 /// Amount of cycle counts to store for start to end measurement
 #[cfg(all(
     CONFIG_SECURITY_PERFORMANCE_KERNEL,
     not(CONFIG_SECURITY_PERFORMANCE_KERNEL_PRECISE)
 ))]
-pub(crate) const CYCLE_COUNTS_LEN: usize = 2;
+pub(crate) const CYCLE_COUNTS_LEN: usize = 3;
 
 /// Force the cycle counts array to be zero sized when it is not needed
 #[cfg(not(CONFIG_SECURITY_PERFORMANCE_KERNEL))]
@@ -40,7 +40,8 @@ pub(crate) const AFTER_PRE_CONDITIONS: usize = 10;
 pub(crate) const AFTER_UPDATE_CACHE: usize = 11;
 pub(crate) const AFTER_POST_CONDITIONS: usize = 12;
 pub(crate) const AFTER_CLEAR_CACHE: usize = 13;
-pub(crate) const STOP: usize = CYCLE_COUNTS_LEN.saturating_sub(1);
+pub(crate) const STOP: usize = CYCLE_COUNTS_LEN.saturating_sub(2);
+pub(crate) const POST_CONDITION_COUNT: usize = CYCLE_COUNTS_LEN.saturating_sub(1);
 
 global_lock! {
     // SAFETY: Initialized in module initializer before first use.
@@ -86,8 +87,8 @@ pub(crate) fn save_tsc_start(cycle_counts: &mut [u64; CYCLE_COUNTS_LEN]) {
     }
 }
 
-/// Store the current cycle count in the last slot of the provided array and immediately print the
-/// results to be collected from user space
+/// Store the current cycle count in the last TSC slot of the provided array, stop the measurement
+/// and immediately store the whole results in the buffer to be fetched later
 #[inline]
 #[cfg_attr(not(CONFIG_SECURITY_PERFORMANCE_KERNEL), allow(unused_variables))]
 pub(crate) fn save_tsc_stop(mut cycle_counts: [u64; CYCLE_COUNTS_LEN], uid: usize) {
@@ -113,6 +114,16 @@ pub(crate) fn save_tsc(cycle_counts: &mut [u64; CYCLE_COUNTS_LEN], index: usize)
     #[cfg(CONFIG_SECURITY_PERFORMANCE_KERNEL_PRECISE)]
     {
         cycle_counts[index] = rdtscp();
+    }
+}
+
+/// Store the amount of post-conditions that were executed
+#[inline]
+#[cfg_attr(not(CONFIG_SECURITY_PERFORMANCE_KERNEL), allow(unused_variables))]
+pub(crate) fn save_post_condition_count(cycle_counts: &mut [u64; CYCLE_COUNTS_LEN], count: usize) {
+    #[cfg(CONFIG_SECURITY_PERFORMANCE_KERNEL)]
+    {
+        cycle_counts[POST_CONDITION_COUNT] = count as u64;
     }
 }
 
