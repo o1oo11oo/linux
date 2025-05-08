@@ -102,7 +102,7 @@ static __always_inline uint64_t rdtscp_sync(void)
 	uint32_t eax, edx;
 	uint32_t aux;
 
-	__asm__ __volatile__("lfence; rdtscp"
+	__asm__ __volatile__("rdtscp; lfence"
 		: "=a"(eax), "=d"(edx), "=c"(aux)
 		:: "memory"
 	);

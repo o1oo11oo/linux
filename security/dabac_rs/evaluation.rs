@@ -70,11 +70,13 @@ pub(crate) fn rdtscp() -> u64 {
 #[inline]
 pub(crate) fn rdtscp_sync() -> u64 {
     let mut aux = 0;
+    let ret;
     // SAFETY: FFI/ASM calls without any requirements
     unsafe {
+        ret = __rdtscp(&mut aux);
         _mm_lfence();
-        __rdtscp(&mut aux)
-    }
+    };
+    ret
 }
 
 /// Store the current cycle count in the fist slot of the provided array
