@@ -4,39 +4,48 @@
 
 int perf_results_init(struct perf_results *store)
 {
+	#if IS_ENABLED(CONFIG_SECURITY_PERFORMANCE_KERNEL)
 	spin_lock_init(&store->lock);
 	store->runners = NULL;
 	store->num_runners = 0;
 	store->record = false;
+	#endif
 	return 0;
 }
 
 void perf_results_start_recording(struct perf_results *store)
 {
+	#if IS_ENABLED(CONFIG_SECURITY_PERFORMANCE_KERNEL)
 	spin_lock(&store->lock);
 	store->record = true;
 	for (size_t i = 0; i < store->num_runners; ++i)
 		store->runners[i].count = 0;
 	spin_unlock(&store->lock);
+	#endif
 }
 
 void perf_results_stop_recording(struct perf_results *store)
 {
+	#if IS_ENABLED(CONFIG_SECURITY_PERFORMANCE_KERNEL)
 	spin_lock(&store->lock);
 	store->record = false;
 	spin_unlock(&store->lock);
+	#endif
 }
 
 void perf_results_clear_entries(struct perf_results *store)
 {
+	#if IS_ENABLED(CONFIG_SECURITY_PERFORMANCE_KERNEL)
 	spin_lock(&store->lock);
 	for (size_t i = 0; i < store->num_runners; ++i)
 		store->runners[i].count = 0;
 	spin_unlock(&store->lock);
+	#endif
 }
 
 void perf_results_free(struct perf_results *store)
 {
+	#if IS_ENABLED(CONFIG_SECURITY_PERFORMANCE_KERNEL)
 	spin_lock(&store->lock);
 	for (size_t i = 0; i < store->num_runners; ++i) {
 		kfree(store->runners[i].entries);
@@ -48,10 +57,12 @@ void perf_results_free(struct perf_results *store)
 	store->runners = NULL;
 	store->num_runners = 0;
 	spin_unlock(&store->lock);
+	#endif
 }
 
 int perf_results_register_runner(struct perf_results *store, uid_t uid, size_t amount)
 {
+	#if IS_ENABLED(CONFIG_SECURITY_PERFORMANCE_KERNEL)
 	size_t index = uid_index(uid);
 	size_t new_size = index + 1;
 
@@ -90,11 +101,14 @@ int perf_results_register_runner(struct perf_results *store, uid_t uid, size_t a
 	}
 
 	spin_unlock(&store->lock);
+	#endif
+
 	return 0;
 }
 
 void perf_results_push(struct perf_results *store, uid_t uid, const u64 values[CYCLE_COUNTS_LEN])
 {
+	#if IS_ENABLED(CONFIG_SECURITY_PERFORMANCE_KERNEL)
 	size_t index = uid_index(uid);
 
 	spin_lock(&store->lock);
@@ -112,10 +126,12 @@ void perf_results_push(struct perf_results *store, uid_t uid, const u64 values[C
 	runner->count++;
 
 	spin_unlock(&store->lock);
+	#endif
 }
 
 void perf_results_serialize_to_json(struct perf_results *results, char *buf, size_t buf_size)
 {
+	#if IS_ENABLED(CONFIG_SECURITY_PERFORMANCE_KERNEL)
 	size_t offset = 0;
 	int i, j, k;
 
@@ -154,4 +170,5 @@ void perf_results_serialize_to_json(struct perf_results *results, char *buf, siz
 
 	offset += scnprintf(buf + offset, buf_size - offset, "]");
 	spin_unlock(&results->lock);
+	#endif
 }

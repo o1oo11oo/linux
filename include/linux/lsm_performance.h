@@ -24,7 +24,8 @@
 #define CYCLE_COUNTS_LEN 2
 // Cannot be zero sized as C does not allow that. Advantage for Rust I guess?
 // Cannot use globals because of parallelism
-#else CYCLE_COUNTS_LEN 1
+#else
+#define CYCLE_COUNTS_LEN 1
 #endif
 
 #define UID_OFFSET 1000

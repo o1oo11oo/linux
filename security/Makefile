@@ -13,7 +13,6 @@ obj-$(CONFIG_MMU)			+= min_addr.o
 # Object file lists
 obj-$(CONFIG_SECURITY)			+= security.o
 obj-$(CONFIG_SECURITYFS)		+= inode.o
-obj-$(CONFIG_SECURITY_PERFORMANCE_KERNEL) += lsm_performance.o
 obj-$(CONFIG_SECURITY_SELINUX)		+= selinux/
 obj-$(CONFIG_SECURITY_SMACK)		+= smack/
 obj-$(CONFIG_HAS_SECURITY_AUDIT)	+= lsm_audit.o
@@ -32,6 +31,10 @@ obj-$(CONFIG_BPF_LSM)			+= bpf/
 obj-$(CONFIG_SECURITY_LANDLOCK)		+= landlock/
 obj-$(CONFIG_SECURITY_IPE)		+= ipe/
 obj-$(CONFIG_SECURITY_DABAC_RS)		+= dabac_rs/
+
+# Performance measurements are always needed in the way the code is set up,
+# otherwise functions are missing. Fixable, but not the most important thing.
+obj-$(CONFIG_SECURITY)			+= lsm_performance.o
 
 # Object integrity file lists
 obj-$(CONFIG_INTEGRITY)			+= integrity/

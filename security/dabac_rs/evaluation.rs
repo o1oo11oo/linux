@@ -90,7 +90,10 @@ pub(crate) fn save_tsc_start(cycle_counts: &mut [u64; CYCLE_COUNTS_LEN]) {
 /// Store the current cycle count in the last TSC slot of the provided array, stop the measurement
 /// and immediately store the whole results in the buffer to be fetched later
 #[inline]
-#[cfg_attr(not(CONFIG_SECURITY_PERFORMANCE_KERNEL), allow(unused_variables))]
+#[cfg_attr(
+    not(CONFIG_SECURITY_PERFORMANCE_KERNEL),
+    allow(unused_variables, unused_mut)
+)]
 pub(crate) fn save_tsc_stop(mut cycle_counts: [u64; CYCLE_COUNTS_LEN], uid: usize) {
     #[cfg(CONFIG_SECURITY_PERFORMANCE_KERNEL)]
     {
