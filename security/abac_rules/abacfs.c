@@ -173,6 +173,8 @@ static ssize_t perf_read(struct file *file, char __user *buf, size_t count, loff
 	// Stop recording when reading
 	perf_results_stop_recording(&abac_rules_perf_store);
 
+	pr_info("Reading perf results");
+
 	// Allocate buffer
 	kbuf = kvmalloc(ABAC_RULES_PERF_FILE_SIZE, GFP_KERNEL);
 	if (!kbuf)
