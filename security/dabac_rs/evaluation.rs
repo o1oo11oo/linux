@@ -11,16 +11,19 @@ use core::arch::x86_64::{__rdtscp, _mm_lfence};
 
 use kernel::{alloc::allocator::KVmalloc, global_lock, prelude::*, str::CString};
 
+/// Amount of additional data to store after the timestamps
+pub(crate) const EXTRA_STATS_AMOUNT: usize = 3;
+
 /// Amount of cycle counts to store for intermediate measurements
 #[cfg(CONFIG_SECURITY_PERFORMANCE_KERNEL_PRECISE)]
-pub(crate) const CYCLE_COUNTS_LEN: usize = 16;
+pub(crate) const CYCLE_COUNTS_LEN: usize = EXTRA_STATS_AMOUNT + 15;
 
 /// Amount of cycle counts to store for start to end measurement
 #[cfg(all(
     CONFIG_SECURITY_PERFORMANCE_KERNEL,
     not(CONFIG_SECURITY_PERFORMANCE_KERNEL_PRECISE)
 ))]
-pub(crate) const CYCLE_COUNTS_LEN: usize = 3;
+pub(crate) const CYCLE_COUNTS_LEN: usize = EXTRA_STATS_AMOUNT + 2;
 
 /// Force the cycle counts array to be zero sized when it is not needed
 #[cfg(not(CONFIG_SECURITY_PERFORMANCE_KERNEL))]
@@ -40,8 +43,8 @@ pub(crate) const AFTER_PRE_CONDITIONS: usize = 10;
 pub(crate) const AFTER_UPDATE_CACHE: usize = 11;
 pub(crate) const AFTER_POST_CONDITIONS: usize = 12;
 pub(crate) const AFTER_CLEAR_CACHE: usize = 13;
-pub(crate) const STOP: usize = CYCLE_COUNTS_LEN.saturating_sub(2);
-pub(crate) const POST_CONDITION_COUNT: usize = CYCLE_COUNTS_LEN.saturating_sub(1);
+pub(crate) const STOP: usize = CYCLE_COUNTS_LEN.saturating_sub(EXTRA_STATS_AMOUNT + 1);
+pub(crate) const EXTRA_STATS_INDEX: usize = CYCLE_COUNTS_LEN.saturating_sub(EXTRA_STATS_AMOUNT);
 
 global_lock! {
     // SAFETY: Initialized in module initializer before first use.
@@ -122,13 +125,20 @@ pub(crate) fn save_tsc(cycle_counts: &mut [u64; CYCLE_COUNTS_LEN], index: usize)
     }
 }
 
-/// Store the amount of post-conditions that were executed
+/// Store additional data about the request.
+///
+/// Currently contains the amount of post-conditions that were executed and the cache hits and
+/// misses.
 #[inline]
 #[cfg_attr(not(CONFIG_SECURITY_PERFORMANCE_KERNEL), allow(unused_variables))]
-pub(crate) fn save_post_condition_count(cycle_counts: &mut [u64; CYCLE_COUNTS_LEN], count: usize) {
+pub(crate) fn save_extra_stats(
+    cycle_counts: &mut [u64; CYCLE_COUNTS_LEN],
+    stats: [u64; EXTRA_STATS_AMOUNT],
+) {
     #[cfg(CONFIG_SECURITY_PERFORMANCE_KERNEL)]
     {
-        cycle_counts[POST_CONDITION_COUNT] = count as u64;
+        cycle_counts[EXTRA_STATS_INDEX..EXTRA_STATS_INDEX + EXTRA_STATS_AMOUNT]
+            .copy_from_slice(&stats);
     }
 }
 

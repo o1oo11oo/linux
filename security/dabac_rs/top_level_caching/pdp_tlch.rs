@@ -252,6 +252,8 @@ pub(crate) fn resolve(
     // Get the rules for this operation, if it is a valid one
     let rules = policy.get(operation).ok_or(EINVAL)?;
     let mut resolution = false;
+    let mut cache_hits = 0;
+    let mut cache_misses = 0;
 
     save_tsc(cycle_counts, AFTER_GET_POLICY);
 
@@ -270,6 +272,7 @@ pub(crate) fn resolve(
         // Since it was stored in the cache, it cannot have any post-conditions
         save_tsc(cycle_counts, AFTER_CHECK_CACHE);
         resolution = entry.value.resolution;
+        cache_hits += 1;
 
         #[cfg(not(CONFIG_SECURITY_PERFORMANCE))]
         pr_info!("Cache hit, resolution: {resolution}, will execute post-conditions: false");
@@ -301,6 +304,7 @@ pub(crate) fn resolve(
         }
 
         save_tsc(cycle_counts, AFTER_UPDATE_CACHE);
+        cache_misses += 1;
 
         #[cfg(not(CONFIG_SECURITY_PERFORMANCE))]
         pr_info!(
@@ -321,7 +325,10 @@ pub(crate) fn resolve(
         )?;
     }
 
-    save_post_condition_count(cycle_counts, post_conditions.len());
+    save_extra_stats(
+        cycle_counts,
+        [post_conditions.len() as u64, cache_hits, cache_misses],
+    );
     save_tsc(cycle_counts, AFTER_POST_CONDITIONS);
 
     // If we executed any post-conditions we need to reset the cache
