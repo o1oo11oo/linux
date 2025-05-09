@@ -117,6 +117,8 @@ pub(crate) fn update_policy(policy: &[u8]) -> Result {
 
 pub(crate) fn read_perf() -> Result<CString<KVmalloc>> {
     // No need for AC decisions for eval
+    pr_info!("Reading perf results");
+
     // Read the perf results from the Evaluation
     evaluation::get_perf_results()
 }
