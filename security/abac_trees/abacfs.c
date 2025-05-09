@@ -11,6 +11,8 @@
 extern struct perf_results abac_trees_perf_store;
 
 const size_t ABAC_TREES_MAX_FILE_SIZE = 8388608; // 8MB
+// perf results can grow up to 15-20ish MB so better be safe than sorry
+const size_t ABAC_TREES_PERF_FILE_SIZE = 31457280; // 30MB
 
 struct dentry *abac_trees_abacfs;
 struct dentry *abac_trees_user_attr_file;
@@ -145,12 +147,12 @@ static ssize_t perf_read(struct file *file, char __user *buf, size_t count, loff
 	perf_results_stop_recording(&abac_trees_perf_store);
 
 	// Allocate buffer
-	kbuf = kvmalloc(ABAC_TREES_MAX_FILE_SIZE, GFP_KERNEL);
+	kbuf = kvmalloc(ABAC_TREES_PERF_FILE_SIZE, GFP_KERNEL);
 	if (!kbuf)
 		return -ENOMEM;
 
 	// Fill with JSON output
-	perf_results_serialize_to_json(&abac_trees_perf_store, kbuf, ABAC_TREES_MAX_FILE_SIZE);
+	perf_results_serialize_to_json(&abac_trees_perf_store, kbuf, ABAC_TREES_PERF_FILE_SIZE);
 
 	// Use simple_read_from_buffer to handle ppos and copy to userspace
 	ret = simple_read_from_buffer(buf, count, ppos, kbuf, strlen(kbuf));
