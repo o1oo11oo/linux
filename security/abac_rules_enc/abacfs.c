@@ -56,9 +56,9 @@ static ssize_t user_attr_write(struct file *filp, const char __user *buffer,
 	}
 	if (abac_rules_enc_user_attr_buf) {
 		abac_rules_enc_clear_user_attrs();
-		kfree(abac_rules_enc_user_attr_buf);
+		kvfree(abac_rules_enc_user_attr_buf);
 	}
-	abac_rules_enc_user_attr_buf = kmalloc(len + 1, GFP_KERNEL);
+	abac_rules_enc_user_attr_buf = kvmalloc(len + 1, GFP_KERNEL);
 	if (!abac_rules_enc_user_attr_buf) {
 		printk(KERN_INFO
 		       "Write failed. Failed to allocate memory for user attributes buffer\n");
@@ -85,9 +85,9 @@ static ssize_t obj_rules_write(struct file *filp, const char __user *buffer, siz
 	}
 	if (abac_rules_enc_obj_rules_buf) {
 		abac_rules_enc_clear_obj_rule_map();
-		kfree(abac_rules_enc_obj_rules_buf);
+		kvfree(abac_rules_enc_obj_rules_buf);
 	}
-	abac_rules_enc_obj_rules_buf = kmalloc(len + 1, GFP_KERNEL);
+	abac_rules_enc_obj_rules_buf = kvmalloc(len + 1, GFP_KERNEL);
 	if (!abac_rules_enc_obj_rules_buf) {
 		printk(KERN_INFO "Write failed. Failed to allocate memory for object rules buffer\n");
 		return -EFAULT;
@@ -116,9 +116,9 @@ static ssize_t env_attr_write(struct file *filp, const char __user *buffer,
 	}
 	if (abac_rules_enc_env_attr_buf) {
 		abac_rules_enc_clear_avp_list(abac_rules_enc_env_attr);
-		kfree(abac_rules_enc_env_attr_buf);
+		kvfree(abac_rules_enc_env_attr_buf);
 	}
-	abac_rules_enc_env_attr_buf = kmalloc(len + 1, GFP_KERNEL);
+	abac_rules_enc_env_attr_buf = kvmalloc(len + 1, GFP_KERNEL);
 	if (!abac_rules_enc_env_attr_buf) {
 		printk(KERN_INFO
 		       "Write failed. Failed to allocate memory for environment "
@@ -146,9 +146,9 @@ static ssize_t policy_write(struct file *filp, const char __user *buffer, size_t
 	}
 	if (abac_rules_enc_policy_buf) {
 		abac_rules_enc_clear_policy();
-		kfree(abac_rules_enc_policy_buf);
+		kvfree(abac_rules_enc_policy_buf);
 	}
-	abac_rules_enc_policy_buf = kmalloc(len + 1, GFP_KERNEL);
+	abac_rules_enc_policy_buf = kvmalloc(len + 1, GFP_KERNEL);
 	if (!abac_rules_enc_policy_buf) {
 		printk(KERN_INFO "Write failed. Failed to allocate memory for policy buffer\n");
 		return -EFAULT;

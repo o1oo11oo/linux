@@ -53,9 +53,9 @@ static ssize_t user_attr_write(struct file *filp, const char __user *buffer,
 	}
 	if (abac_trees_enc_user_attr_buf) {
 		abac_trees_enc_clear_user_attrs();
-		kfree(abac_trees_enc_user_attr_buf);
+		kvfree(abac_trees_enc_user_attr_buf);
 	}
-	abac_trees_enc_user_attr_buf = kmalloc(len + 1, GFP_KERNEL);
+	abac_trees_enc_user_attr_buf = kvmalloc(len + 1, GFP_KERNEL);
 	if (!abac_trees_enc_user_attr_buf) {
 		printk(KERN_INFO
 		       "Write failed. Failed to allocate memory for user attributes buffer\n");
@@ -82,9 +82,9 @@ static ssize_t obj_attr_write(struct file *filp, const char __user *buffer, size
 	}
 	if (abac_trees_enc_obj_attr_buf) {
 		abac_trees_enc_clear_obj_attrs();
-		kfree(abac_trees_enc_obj_attr_buf);
+		kvfree(abac_trees_enc_obj_attr_buf);
 	}
-	abac_trees_enc_obj_attr_buf = kmalloc(len + 1, GFP_KERNEL);
+	abac_trees_enc_obj_attr_buf = kvmalloc(len + 1, GFP_KERNEL);
 	if (!abac_trees_enc_obj_attr_buf) {
 		printk(KERN_INFO "Write failed. Failed to allocate memory for object attributes buffer\n");
 		return -EFAULT;
@@ -113,9 +113,9 @@ static ssize_t env_attr_write(struct file *filp, const char __user *buffer,
 	}
 	if (abac_trees_enc_env_attr_buf) {
 		abac_trees_enc_clear_avp_list(abac_trees_enc_env_attr);
-		kfree(abac_trees_enc_env_attr_buf);
+		kvfree(abac_trees_enc_env_attr_buf);
 	}
-	abac_trees_enc_env_attr_buf = kmalloc(len + 1, GFP_KERNEL);
+	abac_trees_enc_env_attr_buf = kvmalloc(len + 1, GFP_KERNEL);
 	if (!abac_trees_enc_env_attr_buf) {
 		printk(KERN_INFO
 		       "Write failed. Failed to allocate memory for environment "
