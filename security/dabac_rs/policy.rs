@@ -192,7 +192,9 @@ impl PreCondition {
         object_attr: &Attributions,
         env_attr: &Attributions,
     ) -> bool {
-        self.formula.evaluate(user_attr, object_attr, env_attr)
+        self.formula
+            .evaluate(user_attr, object_attr, env_attr)
+            .unwrap_or(false)
     }
 
     fn get_max_attribute_id(&self) -> usize {

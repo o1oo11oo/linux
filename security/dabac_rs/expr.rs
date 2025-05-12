@@ -49,10 +49,12 @@ impl Expression {
         user_attr: &Attributions,
         object_attr: &Attributions,
         env_attr: &Attributions,
-    ) -> bool {
-        self.clauses
-            .iter()
-            .any(|clause| clause.evaluate(user_attr, object_attr, env_attr))
+    ) -> Option<bool> {
+        self.clauses.iter().try_fold(false, |acc, clause| {
+            clause
+                .evaluate(user_attr, object_attr, env_attr)
+                .map(|res| acc || res)
+        })
     }
 
     pub(crate) fn get_max_attribute_id(&self) -> usize {
@@ -108,10 +110,12 @@ impl Conjunction {
         user_attr: &Attributions,
         object_attr: &Attributions,
         env_attr: &Attributions,
-    ) -> bool {
-        self.clauses
-            .iter()
-            .all(|clause| clause.evaluate(user_attr, object_attr, env_attr))
+    ) -> Option<bool> {
+        self.clauses.iter().try_fold(true, |acc, clause| {
+            clause
+                .evaluate(user_attr, object_attr, env_attr)
+                .map(|res| acc && res)
+        })
     }
 
     fn get_max_attribute_id(&self) -> usize {
@@ -168,10 +172,12 @@ impl Literal {
         user_attr: &Attributions,
         object_attr: &Attributions,
         env_attr: &Attributions,
-    ) -> bool {
+    ) -> Option<bool> {
         match self {
             Literal::Identity(term) => term.evaluate(user_attr, object_attr, env_attr),
-            Literal::Negation(term) => !term.evaluate(user_attr, object_attr, env_attr),
+            Literal::Negation(term) => term
+                .evaluate(user_attr, object_attr, env_attr)
+                .map(|res| !res),
         }
     }
 
@@ -233,23 +239,19 @@ impl Term {
         user_attr: &Attributions,
         object_attr: &Attributions,
         env_attr: &Attributions,
-    ) -> bool {
+    ) -> Option<bool> {
         // If an attribute that is not set or found is requested for evaluation,
         // this is treated as an unfulfillable requirement, which means the
         // resolution is always false, even if both arguments would return as
         // None, similar to how NaN != NaN.
-        let Some(left) = self.left.evaluate(user_attr, object_attr, env_attr) else {
-            return false;
-        };
-        let Some(right) = self.right.evaluate(user_attr, object_attr, env_attr) else {
-            return false;
-        };
+        let left = self.left.evaluate(user_attr, object_attr, env_attr)?;
+        let right = self.right.evaluate(user_attr, object_attr, env_attr)?;
 
-        match self.op {
+        Some(match self.op {
             Operation::Less => left < right,
             Operation::Equals => left == right,
             Operation::Greater => left > right,
-        }
+        })
     }
 
     fn get_max_attribute_id(&self) -> usize {
