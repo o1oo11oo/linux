@@ -46,16 +46,32 @@ pub(crate) const AFTER_CLEAR_CACHE: usize = 13;
 pub(crate) const STOP: usize = CYCLE_COUNTS_LEN.saturating_sub(EXTRA_STATS_AMOUNT + 1);
 pub(crate) const EXTRA_STATS_INDEX: usize = CYCLE_COUNTS_LEN.saturating_sub(EXTRA_STATS_AMOUNT);
 
+/// Storage for the performance results.
+///
+/// Not protected by a global lock to not slow down the evaluation. The synchronization comes from
+/// the fact that each runner can only send one request at a time, and each runner has their own
+/// entry into this data structure. To ensure that no two mutable references to the same static mut
+/// exist at the same time, only pointers are used until the Vec for one runner is reached. This
+/// feels similar to how `split_at_mut` works internally to me, mutable references are ok as long as
+/// they do not overlap. I am very far from certain though and I cannot easily check this under
+/// miri. So far the results I am getting make sense and it looks like nothing has stomped all over
+/// my memory yet.
+///
+/// The runner registration is synchronized using the [`PERF_REGISTRATION`] global lock. Cleanup is
+/// only triggered by the orchestrator and can therefore not happen in parallel. But to quote the
+/// Rustonomicon: "the guardrails here are dental floss".
+static mut PERF_RESULTS: PerfResults = PerfResults::new();
+
 global_lock! {
     // SAFETY: Initialized in module initializer before first use.
-    unsafe(uninit) static PERF_RESULTS: SpinLock<PerfResults> = PerfResults::new();
+    unsafe(uninit) static PERF_REGISTRATION: SpinLock<()> = ();
 }
 
 /// Initialize the evaluation code during LSM initialization
 pub(crate) fn init() -> Result {
     // SAFETY: All initializers are called exactly once.
     unsafe {
-        PERF_RESULTS.init();
+        PERF_REGISTRATION.init();
     };
 
     Ok(())
@@ -118,8 +134,12 @@ pub(crate) fn save_tsc_stop(mut cycle_counts: [u64; CYCLE_COUNTS_LEN], uid: usiz
     {
         cycle_counts[STOP] = rdtscp();
 
-        // Lock the results store and add the current ones
-        PERF_RESULTS.lock().push(uid, cycle_counts);
+        // Because all runners have their own entry into the Vec, add entries without locking it.
+        // This requires no mutable references to be created until the Vec for each runner is
+        // reached, as otherwise this is UB.
+        // SAFETY: This is during performance evaluation and the orechestrator is waiting for the
+        // runners, so the conditions of the call are fulfilled.
+        unsafe { PerfResults::push(uid, cycle_counts) }
     }
 }
 
@@ -157,29 +177,41 @@ pub(crate) fn save_extra_stats(
 }
 
 pub(crate) fn register_perf(uid: usize, amount: usize) -> Result {
-    let mut guard = PERF_RESULTS.lock();
-    guard.register_runner(uid, amount)
+    let _guard = PERF_REGISTRATION.lock();
+    // SAFETY: actually decent as long as nothing is getting decisions from the LSM, which could
+    // access the PERF_RESULTS in parallel
+    unsafe { PERF_RESULTS.register_runner(uid, amount) }
 }
 
 pub(crate) fn start_perf_run() {
-    let mut guard = PERF_RESULTS.lock();
-    guard.start_recording();
+    let _guard = PERF_REGISTRATION.lock();
+    // SAFETY: actually decent as long as nothing is getting decisions from the LSM, which could
+    // access the PERF_RESULTS in parallel
+    unsafe { PERF_RESULTS.start_recording() }
 }
 
 pub(crate) fn get_perf_results() -> Result<CString<KVmalloc>> {
-    let mut guard = PERF_RESULTS.lock();
-    guard.stop_recording();
-    CString::try_from_fmt(fmt!("{}", &*guard))
+    let _guard = PERF_REGISTRATION.lock();
+    // SAFETY: actually decent as long as nothing is getting decisions from the LSM, which could
+    // access the PERF_RESULTS in parallel
+    unsafe {
+        PERF_RESULTS.stop_recording();
+        CString::try_from_fmt(fmt!("{}", &PERF_RESULTS))
+    }
 }
 
 pub(crate) fn clear_perf_data() {
-    let mut guard = PERF_RESULTS.lock();
-    guard.clear();
+    let _guard = PERF_REGISTRATION.lock();
+    // SAFETY: actually decent as long as nothing is getting decisions from the LSM, which could
+    // access the PERF_RESULTS in parallel
+    unsafe { PERF_RESULTS.clear() }
 }
 
 pub(crate) fn reset_perf_data() {
-    let mut guard = PERF_RESULTS.lock();
-    guard.reset();
+    let _guard = PERF_REGISTRATION.lock();
+    // SAFETY: actually decent as long as nothing is getting decisions from the LSM, which could
+    // access the PERF_RESULTS in parallel
+    unsafe { PERF_RESULTS.reset() }
 }
 
 #[derive(Debug)]
@@ -233,21 +265,36 @@ impl PerfResults {
         Ok(())
     }
 
-    pub(crate) fn push(&mut self, uid: usize, cycle_counts: [u64; CYCLE_COUNTS_LEN]) {
+    /// # Safety
+    ///
+    /// May only be called during performance evaluation after all runners were set up and while the
+    /// perf store is not modified in any other way concurrently.
+    pub(crate) unsafe fn push(uid: usize, cycle_counts: [u64; CYCLE_COUNTS_LEN]) {
+        let ptr = &raw mut PERF_RESULTS;
+
         // Only store entries if we are recording
-        if !self.record {
+        // SAFETY: The pointer is valid because it comes from the static instance
+        if unsafe { !(*ptr).record } {
             return;
         }
 
         // All processes run under uids starting from 1000
         let index = uid.saturating_sub(1000);
 
+        // SAFETY: The pointer is valid because it comes from the static instance.
+        let list = unsafe { (*ptr).list.ptr.as_ptr() };
+
+        // SAFETY: The runner must have been registered before as per the safety requirement of this
+        // function, so we can get it its entry.
+        let runner_ptr = unsafe { list.add(index) };
+
+        // SAFETY: The runner only sends one request at a time, so this is the only mutable
+        // reference to its Vec.
+        let runner_vec = unsafe { &mut *runner_ptr };
+
         // SAFETY: according to the invariants the runner has registered itself beforehand and
         // provided the maximum amount of requests it will make during evaluation
-        unsafe {
-            let runner_entry = self.list.get_unchecked_mut(index);
-            runner_entry.push_within_capacity_unchecked(cycle_counts);
-        };
+        unsafe { runner_vec.push_within_capacity_unchecked(cycle_counts) };
     }
 }
 

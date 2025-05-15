@@ -101,7 +101,8 @@ macro_rules! kvec {
 /// - The `Allocator` type `A` of the vector is the exact same `Allocator` type the backing buffer
 ///   was allocated with (and must be freed with).
 pub struct Vec<T, A: Allocator> {
-    ptr: NonNull<T>,
+    /// Public for non-locking and probably unsafe performance evaluation shenanigangs.
+    pub ptr: NonNull<T>,
     /// Represents the actual buffer size as `cap` times `size_of::<T>` bytes.
     ///
     /// Note: This isn't quite the same as `Self::capacity`, which in contrast returns the number of

@@ -111,11 +111,11 @@ void perf_results_push(struct perf_results *store, uid_t uid, const u64 values[C
 	#if IS_ENABLED(CONFIG_SECURITY_PERFORMANCE_KERNEL)
 	size_t index = uid_index(uid);
 
-	spin_lock(&store->lock);
+	//spin_lock(&store->lock);
 
 	// Only store entries if we are recording
 	if (!store->record) {
-		spin_unlock(&store->lock);
+		//spin_unlock(&store->lock);
 		return;
 	}
 
@@ -125,7 +125,7 @@ void perf_results_push(struct perf_results *store, uid_t uid, const u64 values[C
 	memcpy(dst, values, sizeof(u64) * CYCLE_COUNTS_LEN);
 	runner->count++;
 
-	spin_unlock(&store->lock);
+	//spin_unlock(&store->lock);
 	#endif
 }
 
