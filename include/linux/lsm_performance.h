@@ -6,6 +6,10 @@
  * This file provides routines to aid performance microbenchmarks for the ABAC
  * LSM and for SELinux, which are evaluated as part of the thesis. The dabac_rs
  * variants, implemented in Rust, use their own Rust eval code.
+ *
+ * Parts of this code were created using AI assisted code generation, based on
+ * the already existing Rust implementation. This was done in accordance with my
+ * advisor.
  */
 
 #ifndef _LSM_PERFORMANCE_H
