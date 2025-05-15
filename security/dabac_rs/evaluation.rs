@@ -82,6 +82,20 @@ pub(crate) fn rdtscp_sync() -> u64 {
     ret
 }
 
+/// Totally serialize and read the current cycle count
+#[inline]
+pub(crate) fn rdtscp_full_sync() -> u64 {
+    let mut aux = 0;
+    let ret;
+    // SAFETY: FFI/ASM calls without any requirements
+    unsafe {
+        _mm_lfence();
+        ret = __rdtscp(&mut aux);
+        _mm_lfence();
+    };
+    ret
+}
+
 /// Store the current cycle count in the fist slot of the provided array
 #[inline]
 #[cfg_attr(not(CONFIG_SECURITY_PERFORMANCE_KERNEL), allow(unused_variables))]

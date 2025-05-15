@@ -111,6 +111,22 @@ static __always_inline uint64_t rdtscp_sync(void)
 }
 
 /**
+ * Completely serialize and read the current cycle count
+ */
+static __always_inline uint64_t rdtscp_full_sync(void)
+{
+	uint32_t eax, edx;
+	uint32_t aux;
+
+	__asm__ __volatile__("lfence; rdtscp; lfence"
+		: "=a"(eax), "=d"(edx), "=c"(aux)
+		:: "memory"
+	);
+
+	return ((uint64_t)edx) << 32 | eax;
+}
+
+/**
  * Store the current cycle count in the first slot of the provided array
  */
 static __always_inline void save_tsc_start(uint64_t *cycle_counts)
