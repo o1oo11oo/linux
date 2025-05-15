@@ -132,7 +132,7 @@ static __always_inline uint64_t rdtscp_full_sync(void)
 static __always_inline void save_tsc_start(uint64_t *cycle_counts)
 {
 	#if IS_ENABLED(CONFIG_SECURITY_PERFORMANCE_KERNEL)
-	cycle_counts[TSC_START] = rdtscp_sync();
+	cycle_counts[TSC_START] = rdtscp();
 	#endif
 }
 

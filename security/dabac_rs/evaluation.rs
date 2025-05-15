@@ -118,7 +118,7 @@ pub(crate) fn rdtscp_full_sync() -> u64 {
 pub(crate) fn save_tsc_start(cycle_counts: &mut [u64; CYCLE_COUNTS_LEN]) {
     #[cfg(CONFIG_SECURITY_PERFORMANCE_KERNEL)]
     {
-        cycle_counts[START] = rdtscp_sync();
+        cycle_counts[START] = rdtscp();
     }
 }
 
