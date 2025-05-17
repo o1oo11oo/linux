@@ -28,7 +28,10 @@ vendored_global_lock! {
 }
 
 vendored_global_lock! {
-    // SAFETY: Initialized in LSM initializer before first use.
+    // SAFETY: Initialized in LSM initializer before first use. Lint is needed because the
+    // macro_rules macro seems to prevent clippy from recognizing the safety comment for creating
+    // the ObjectAttributes.
+    #[allow(clippy::undocumented_unsafe_blocks)]
     pub(crate) unsafe(uninit) static OBJECT_ATTRIBUTES: Lock<ObjectAttributes> = unsafe { ObjectAttributes::new() };
 }
 
