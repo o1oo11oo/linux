@@ -17,7 +17,7 @@ use core::arch::x86_64::{__rdtscp, _mm_lfence};
 use kernel::{alloc::allocator::KVmalloc, global_lock, prelude::*, str::CString};
 
 /// Amount of additional data to store after the timestamps
-pub(crate) const EXTRA_STATS_AMOUNT: usize = 3;
+pub(crate) const EXTRA_STATS_AMOUNT: usize = 5;
 
 /// Amount of cycle counts to store for intermediate measurements
 #[cfg(CONFIG_SECURITY_PERFORMANCE_KERNEL_PRECISE)]

@@ -251,6 +251,8 @@ pub(crate) fn resolve(
     let mut resolution = false;
     let mut cache_hits = 0;
     let mut cache_misses = 0;
+    let mut policy_somes = 0;
+    let mut policy_nones = 0;
 
     save_tsc(cycle_counts, AFTER_GET_POLICY);
 
@@ -279,7 +281,17 @@ pub(crate) fn resolve(
             // No cache entry was found, evaluate pre-condition
             cache_misses += 1;
 
-            let formula_resolution = rule.pre.evaluate(user_attr, object_attr, env_attr);
+            let formula_resolution = match rule.pre.evaluate(user_attr, object_attr, env_attr) {
+                Some(res) => {
+                    policy_somes += 1;
+                    res
+                }
+                None => {
+                    policy_nones += 1;
+                    false
+                }
+            };
+
             if formula_resolution {
                 resolution = true;
                 if !rule.post.changes.is_empty() {
@@ -327,7 +339,13 @@ pub(crate) fn resolve(
 
     save_extra_stats(
         cycle_counts,
-        [post_conditions.len() as u64, cache_hits, cache_misses],
+        [
+            post_conditions.len() as u64,
+            cache_hits,
+            cache_misses,
+            policy_somes,
+            policy_nones,
+        ],
     );
     save_tsc(cycle_counts, AFTER_POST_CONDITIONS);
 

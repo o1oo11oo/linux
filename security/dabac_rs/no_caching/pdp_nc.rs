@@ -210,6 +210,8 @@ pub(crate) fn resolve(
     // Collect post-conditions so that they can be executed after all the pre-conditions have been
     // checked
     let mut post_conditions = ArrayVec::<_, { MAX_POST_CONDITIONS }>::new();
+    let mut policy_somes = 0;
+    let mut policy_nones = 0;
 
     #[cfg(not(CONFIG_SECURITY_PERFORMANCE))]
     pr_info!(
@@ -225,7 +227,18 @@ pub(crate) fn resolve(
     // Check all rules if they allow access and collect all post-conditions for the ones evaluating
     // to true to execute them after all rules were checked
     for rule in rules.iter() {
-        if rule.pre.evaluate(user_attr, object_attr, env_attr) {
+        let formula_resolution = match rule.pre.evaluate(user_attr, object_attr, env_attr) {
+            Some(res) => {
+                policy_somes += 1;
+                res
+            }
+            None => {
+                policy_nones += 1;
+                false
+            }
+        };
+
+        if formula_resolution {
             resolution = true;
             if !rule.post.changes.is_empty() {
                 post_conditions.try_push(&rule.post)?;
@@ -253,7 +266,16 @@ pub(crate) fn resolve(
         )?;
     }
 
-    save_extra_stats(cycle_counts, [post_conditions.len() as u64, 0, 0]);
+    save_extra_stats(
+        cycle_counts,
+        [
+            post_conditions.len() as u64,
+            0,
+            0,
+            policy_somes,
+            policy_nones,
+        ],
+    );
     save_tsc(cycle_counts, AFTER_POST_CONDITIONS);
 
     Ok(resolution)
