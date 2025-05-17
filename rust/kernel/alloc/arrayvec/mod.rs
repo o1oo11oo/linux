@@ -26,6 +26,7 @@
     unsafe_op_in_unsafe_fn,
     clippy::let_and_return,
     clippy::manual_next_back,
+    clippy::mem_replace_with_default,
     clippy::missing_safety_doc,
     clippy::module_inception,
     clippy::non_canonical_clone_impl,

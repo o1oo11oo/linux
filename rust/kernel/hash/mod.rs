@@ -28,6 +28,7 @@
     clippy::must_use_candidate,
     clippy::option_if_let_else,
     clippy::redundant_else,
+    clippy::manual_div_ceil,
     clippy::manual_map,
     clippy::missing_safety_doc,
     clippy::missing_errors_doc,
