@@ -8,9 +8,11 @@
 
 use kernel::{
     alloc::{allocator::KVmalloc, arrayvec::ArrayVec},
-    bindings, c_str,
+    bindings::{self, PATH_MAX},
+    c_str,
     crypto::hash::{Shash, ShashDesc},
     fs::LocalFile,
+    kvec,
     lru::LRUCache,
     prelude::*,
     str::CString,
@@ -149,10 +151,11 @@ pub(crate) fn file_permission(file: &LocalFile, mask: i32) -> Result<bool> {
     // Store the cycle counts for this request for performance measurement
     let mut cycle_counts = [0; CYCLE_COUNTS_LEN];
 
-    let full_name = helpers::file_get_full_name(file)?;
+    let mut buf = kvec![0u8; PATH_MAX as _]?;
+    let full_name = helpers::file_get_full_name(file, &mut buf);
 
     // Allow everything unprotected/out of scope
-    if !is_protected(&full_name) {
+    if !is_protected(full_name) {
         return Ok(true);
     }
 

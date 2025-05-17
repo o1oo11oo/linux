@@ -7,11 +7,11 @@
 
 use kernel::{
     alloc::Flags,
-    bindings::{dentry_path_raw, PATH_MAX},
+    bindings::dentry_path_raw,
     fs::LocalFile,
     kvec,
     prelude::*,
-    str::{BStr, CStr, CString},
+    str::{BStr, CStr},
     task::Kuid,
 };
 
@@ -33,15 +33,14 @@ pub(crate) fn _file_get_name(file: &LocalFile) -> &BStr {
     BStr::from_bytes(bytes)
 }
 
-pub(crate) fn file_get_full_name(file: &LocalFile) -> Result<CString> {
-    let mut buf = kvec![0u8; PATH_MAX as _]?;
+pub(crate) fn file_get_full_name<'a>(file: &LocalFile, buf: &'a mut [u8]) -> &'a CStr {
     // SAFETY: `file` points to a valid file
     let dentry = unsafe { (*file.as_ptr()).f_path.dentry };
     // SAFETY: FFI call, dentry comes from a valid `file`
     let full_name = unsafe { dentry_path_raw(dentry, buf.as_mut_ptr(), buf.len() as _) };
     // SAFETY: `full_name` points to a valid C string and is alive as long as
     // `buf` is not freed, which only happens after it is converted to CString
-    Ok(unsafe { CStr::from_char_ptr(full_name as _) }.try_into()?)
+    unsafe { CStr::from_char_ptr(full_name as _) }
 }
 
 pub(crate) fn file_get_inode_number(file: &LocalFile) -> kernel::ffi::c_ulong {
