@@ -4,8 +4,13 @@
 //!
 //! Contains the code for the in-kernel part of the performance measurement for the thesis.
 
-// Not all position identifiers or functions are used in all variants
-#![allow(dead_code)]
+// Not all position identifiers or functions are used in all variants. We also create references to
+// static muts for performance evaluation to avoid introducing locks to protect the results store.
+// Access to static mut references is either protected by another lock, or only happens during eval,
+// where pointers are used till the accessed memory is seperated and only the store for each runner
+// individually is accessed. This ensures only a single mutable reference to the same data exists at
+// the same time.
+#![allow(dead_code, static_mut_refs)]
 
 use core::arch::x86_64::{__rdtscp, _mm_lfence};
 
