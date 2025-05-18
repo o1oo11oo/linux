@@ -27,7 +27,7 @@ static struct abac_rule *parse_line(char *line) {
 	if (strcmp(line, "MODIFY") == 0) {
 		r->op = ABAC_MODIFY;
 	} else if (strcmp(line, "READ") == 0){
-		r->op = ABAC_MODIFY;
+		r->op = ABAC_READ;
 	}
 	return r;
 }
